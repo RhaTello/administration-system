@@ -1,10 +1,57 @@
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+@import "tailwindcss";
+
+button, select { cursor: pointer; }
+
+/* Quitar flechas nativas de inputs numéricos */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+
+/* ── Estilos del ticket (pantalla y impresión) ── */
+
+#ticket-print {
+  display: none;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: bold;
+  width: 72mm;
+  padding: 4mm;
+  line-height: 1.5;
 }
 
-body {
-  font-family: system-ui, -apple-system, sans-serif;
-  line-height: 1.5;
+.ticket-header { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1px; margin-bottom: 5px; }
+.ticket-nombre { font-size: 14px; font-weight: bold; letter-spacing: 1px; }
+.ticket-divider { border-top: 1px dashed #000; margin: 5px 0; }
+.ticket-row { display: flex; justify-content: space-between; }
+.ticket-center { text-align: center; }
+.ticket-small { font-size: 11px; }
+.ticket-item { margin-bottom: 6px; }
+.ticket-item-num { font-weight: bold; }
+.ticket-desc { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticket-total { font-weight: bold; font-size: 14px; margin-top: 2px; }
+
+/* Vista previa del ticket en pantalla (dentro del modal) */
+.ticket-preview #ticket-print {
+  display: block;
+  border: 1px dashed #ccc;
+  background: white;
+  margin: 0 auto;
+}
+
+@media print {
+  @page { size: 80mm auto; margin: 0; }
+
+  body * { visibility: hidden !important; }
+
+  #ticket-print {
+    display: block !important;
+    visibility: visible !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 72mm;
+    padding: 4mm;
+  }
+
+  #ticket-print * { visibility: visible !important; }
 }
