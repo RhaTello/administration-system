@@ -18,6 +18,11 @@ env/
 # FastAPI / uvicorn
 *.log
 
+# Base de datos SQLite (datos de instancia, no código)
+*.db
+*.db-shm
+*.db-wal
+
 # Node / Vite
 node_modules/
 dist/
