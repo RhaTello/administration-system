@@ -1,6 +1,5 @@
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Literal
 
 
 class CategoriaSimple(BaseModel):
@@ -55,7 +54,7 @@ class ProductoBase(BaseModel):
     familia_id: int
     medida: str | None = None
     material: str | None = None
-    tipo_medida: Literal["fraccional", "milimétrico"] | None = None
+    tipo_medida: str | None = None
     precio: float | None = None
     costo: float | None = None
     stock: int = 0
@@ -70,7 +69,7 @@ class ProductoUpdate(BaseModel):
     familia_id: int | None = None
     medida: str | None = None
     material: str | None = None
-    tipo_medida: Literal["fraccional", "milimétrico"] | None = None
+    tipo_medida: str | None = None
     precio: float | None = None
     costo: float | None = None
     stock: int | None = None
@@ -111,4 +110,24 @@ class VentaResponse(BaseModel):
     total: float
     notas: str | None
     items: list[VentaItemResponse]
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MaterialCreate(BaseModel):
+    nombre: str
+
+
+class MaterialResponse(BaseModel):
+    id: int
+    nombre: str
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TipoMedidaCreate(BaseModel):
+    nombre: str
+
+
+class TipoMedidaResponse(BaseModel):
+    id: int
+    nombre: str
     model_config = ConfigDict(from_attributes=True)

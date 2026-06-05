@@ -43,6 +43,20 @@ class Producto(Base):
     familia = relationship("Familia", back_populates="productos")
 
 
+class Material(Base):
+    __tablename__ = "materiales"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String, nullable=False, unique=True)
+
+
+class TipoMedida(Base):
+    __tablename__ = "tipos_medida"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String, nullable=False, unique=True)
+
+
 class Venta(Base):
     __tablename__ = "ventas"
 

@@ -1,9 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 from app.database import engine
 from app import models
-from app.routers import health, productos, categorias, familias, ventas, estadisticas
+from app.routers import health, productos, categorias, familias, ventas, estadisticas, catalogos
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -14,6 +15,17 @@ with engine.connect() as conn:
         conn.commit()
     except Exception:
         pass  # La columna ya existe
+
+# Seed de catálogos iniciales (solo si las tablas están vacías)
+with Session(engine) as session:
+    if session.query(models.Material).count() == 0:
+        for nombre in ['Gr-8', 'Gr-5', 'Galvanizado', 'Inoxidable']:
+            session.add(models.Material(nombre=nombre))
+        session.commit()
+    if session.query(models.TipoMedida).count() == 0:
+        for nombre in ['fraccional', 'milimétrico']:
+            session.add(models.TipoMedida(nombre=nombre))
+        session.commit()
 
 app = FastAPI(title="Systema API", version="0.1.0")
 
@@ -31,6 +43,7 @@ app.include_router(categorias.router, prefix="/api")
 app.include_router(familias.router, prefix="/api")
 app.include_router(ventas.router, prefix="/api")
 app.include_router(estadisticas.router, prefix="/api")
+app.include_router(catalogos.router, prefix="/api")
 
 
 if __name__ == "__main__":

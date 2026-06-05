@@ -1,5 +1,6 @@
 import csv
 import io
+import unicodedata
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
@@ -7,6 +8,14 @@ from typing import Optional
 from app.database import get_db
 from app import models
 from app.schemas import ProductoCreate, ProductoUpdate, ProductoResponse
+
+
+def _normalizar(s: str) -> str:
+    """Quita acentos y pasa a minúsculas para comparación flexible."""
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', s.lower())
+        if unicodedata.category(c) != 'Mn'
+    )
 
 router = APIRouter(prefix="/productos", tags=["productos"])
 
@@ -107,28 +116,26 @@ def eliminar_producto(producto_id: int, db: Session = Depends(get_db)):
     db.commit()
 
 
-COLUMNAS_CSV = {"sku", "familia", "medida", "material", "tipo_medida", "precio", "costo", "stock"}
-TIPOS_MEDIDA_VALIDOS = {"fraccional", "milimétrico"}
-
-
 @router.post("/importar")
 async def importar_productos(archivo: UploadFile = File(...), db: Session = Depends(get_db)):
     if not archivo.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="El archivo debe ser .csv")
 
     contenido = await archivo.read()
-    # utf-8-sig maneja el BOM que agrega Excel al guardar como CSV
     texto = contenido.decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(texto))
 
     if not reader.fieldnames or not {"sku", "familia"}.issubset(set(reader.fieldnames)):
         raise HTTPException(status_code=400, detail="El CSV debe tener al menos las columnas: sku, familia")
 
-    # Cache de familias para no hacer una query por fila
+    # Caches para no hacer queries por fila
     familias = {f.nombre.lower(): f for f in db.query(models.Familia).all()}
+    # Mapeo normalizado → nombre canónico en DB
+    tipos_medida_map = {_normalizar(t.nombre): t.nombre for t in db.query(models.TipoMedida).all()}
+    materiales_map = {_normalizar(m.nombre): m.nombre for m in db.query(models.Material).all()}
 
     importados = 0
-    omitidos = 0
+    actualizados = 0
     errores = []
 
     for i, fila in enumerate(reader, start=2):
@@ -142,41 +149,65 @@ async def importar_productos(archivo: UploadFile = File(...), db: Session = Depe
             errores.append({"fila": i, "sku": sku, "error": "Familia vacía"})
             continue
 
-        # SKU duplicado: omitir silenciosamente
-        if db.query(models.Producto).filter(models.Producto.sku == sku).first():
-            omitidos += 1
-            continue
-
         familia = familias.get(familia_nombre.lower())
         if not familia:
             errores.append({"fila": i, "sku": sku, "error": f"Familia '{familia_nombre}' no encontrada"})
             continue
 
-        tipo_medida_val = fila.get("tipo_medida", "").strip() or None
-        if tipo_medida_val and tipo_medida_val not in TIPOS_MEDIDA_VALIDOS:
-            errores.append({"fila": i, "sku": sku, "error": f"tipo_medida inválido: '{tipo_medida_val}'"})
-            continue
+        # Resolución flexible de tipo_medida (acepta variaciones de mayúsculas/acentos)
+        tipo_medida_raw = fila.get("tipo_medida", "").strip()
+        tipo_medida_val = None
+        if tipo_medida_raw:
+            tipo_medida_val = tipos_medida_map.get(_normalizar(tipo_medida_raw))
+            if tipo_medida_val is None:
+                errores.append({"fila": i, "sku": sku, "error": f"tipo_medida desconocido: '{tipo_medida_raw}'"})
+                continue
+
+        # Resolución flexible de material
+        material_raw = fila.get("material", "").strip()
+        material_val = None
+        if material_raw:
+            material_val = materiales_map.get(_normalizar(material_raw))
+            if material_val is None:
+                errores.append({"fila": i, "sku": sku, "error": f"material desconocido: '{material_raw}'"})
+                continue
 
         try:
             precio_str = fila.get("precio", "").strip()
             costo_str = fila.get("costo", "").strip()
             stock_str = fila.get("stock", "").strip()
 
-            db.add(models.Producto(
-                sku=sku,
-                familia_id=familia.id,
-                medida=fila.get("medida", "").strip() or None,
-                material=fila.get("material", "").strip() or None,
-                tipo_medida=tipo_medida_val,
-                precio=float(precio_str) if precio_str else None,
-                costo=float(costo_str) if costo_str else None,
-                stock=int(stock_str) if stock_str else 0,
-            ))
-            importados += 1
+            precio = float(precio_str) if precio_str else None
+            costo = float(costo_str) if costo_str else None
+            stock = int(stock_str) if stock_str else 0
+            medida = fila.get("medida", "").strip() or None
+
+            existente = db.query(models.Producto).filter(models.Producto.sku == sku).first()
+            if existente:
+                existente.familia_id = familia.id
+                existente.medida = medida
+                existente.material = material_val
+                existente.tipo_medida = tipo_medida_val
+                existente.precio = precio
+                existente.costo = costo
+                existente.stock = stock
+                actualizados += 1
+            else:
+                db.add(models.Producto(
+                    sku=sku,
+                    familia_id=familia.id,
+                    medida=medida,
+                    material=material_val,
+                    tipo_medida=tipo_medida_val,
+                    precio=precio,
+                    costo=costo,
+                    stock=stock,
+                ))
+                importados += 1
         except ValueError as e:
             errores.append({"fila": i, "sku": sku, "error": f"Valor inválido: {e}"})
 
-    if importados > 0:
+    if importados > 0 or actualizados > 0:
         db.commit()
 
-    return {"importados": importados, "omitidos": omitidos, "errores": errores}
+    return {"importados": importados, "actualizados": actualizados, "errores": errores}

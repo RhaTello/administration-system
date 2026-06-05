@@ -3,7 +3,7 @@ import { Plus, Minus, Trash2, Printer, ShoppingCart } from 'lucide-react'
 import Modal from '../components/Modal'
 import TicketImprimible from '../components/TicketImprimible'
 import { getProductos } from '../api/productos'
-import { MATERIALES, TIPOS_MEDIDA } from '../constants'
+import { getMateriales, getTiposMedida } from '../api/catalogos'
 import { getCategorias } from '../api/categorias'
 import { getFamilias } from '../api/familias'
 import { createVenta } from '../api/ventas'
@@ -56,6 +56,8 @@ export default function Ventas() {
   const [buscando, setBuscando] = useState(false)
   const [categorias, setCategorias] = useState([])
   const [familias, setFamilias] = useState([])
+  const [materiales, setMateriales] = useState([])
+  const [tiposMedida, setTiposMedida] = useState([])
   const [carrito, setCarrito] = useState([])
   const [descuento, setDescuento] = useState(0)
   const [procesando, setProcesando] = useState(false)
@@ -65,6 +67,8 @@ export default function Ventas() {
   useEffect(() => {
     getCategorias().then(setCategorias).catch(() => {})
     getFamilias().then(setFamilias).catch(() => {})
+    getMateriales().then(setMateriales).catch(() => {})
+    getTiposMedida().then(setTiposMedida).catch(() => {})
   }, [])
 
   const hayFiltros = filtros.sku.trim() || filtros.familia_id || filtros.categoria_id || filtros.material.trim() || filtros.tipo_medida
@@ -171,7 +175,7 @@ export default function Ventas() {
             </select>
             <select value={filtros.material} onChange={setFiltro('material')} className={inputClass}>
               <option value="">Todos los materiales</option>
-              {MATERIALES.map(m => <option key={m} value={m}>{m}</option>)}
+              {materiales.map(m => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}
             </select>
             <input
               value={filtros.medida}
@@ -181,7 +185,7 @@ export default function Ventas() {
             />
             <select value={filtros.tipo_medida} onChange={setFiltro('tipo_medida')} className={inputClass}>
               <option value="">Todos los tipos</option>
-              {TIPOS_MEDIDA.map(t => <option key={t} value={t}>{t}</option>)}
+              {tiposMedida.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
             </select>
           </div>
         </div>

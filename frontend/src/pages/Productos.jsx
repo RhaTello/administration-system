@@ -1,15 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Pencil, Trash2, Upload, Download, CheckCircle, AlertCircle } from 'lucide-react'
+import { Plus, Pencil, Trash2, Upload, Download, Settings, X, Check } from 'lucide-react'
 import Modal from '../components/Modal'
 import * as api from '../api/productos'
+import * as catalogosApi from '../api/catalogos'
 import { getCategorias } from '../api/categorias'
 import { getFamilias } from '../api/familias'
-import { MATERIALES, TIPOS_MEDIDA } from '../constants'
 
 const inputClass = 'border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const labelClass = 'block text-sm font-medium text-gray-700 mb-1'
 
-function ProductoForm({ inicial, familias, onGuardar, onCancelar }) {
+function ProductoForm({ inicial, familias, materiales, tiposMedida, onGuardar, onCancelar }) {
   const [form, setForm] = useState({
     sku: inicial?.sku ?? '',
     familia_id: inicial?.familia_id ?? '',
@@ -71,14 +71,14 @@ function ProductoForm({ inicial, familias, onGuardar, onCancelar }) {
           <label className={labelClass}>Material</label>
           <select value={form.material} onChange={set('material')} className={`${inputClass} w-full`}>
             <option value="">— Ninguno —</option>
-            {MATERIALES.map(m => <option key={m} value={m}>{m}</option>)}
+            {materiales.map(m => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}
           </select>
         </div>
         <div>
           <label className={labelClass}>Tipo de medida</label>
           <select value={form.tipo_medida} onChange={set('tipo_medida')} className={`${inputClass} w-full`}>
             <option value="">— Ninguno —</option>
-            {TIPOS_MEDIDA.map(t => <option key={t} value={t}>{t}</option>)}
+            {tiposMedida.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
           </select>
         </div>
         <div>
@@ -106,21 +106,137 @@ function ProductoForm({ inicial, familias, onGuardar, onCancelar }) {
   )
 }
 
+function CatalogoSeccion({ titulo, items, onAgregar, onRenombrar, onEliminar }) {
+  const [nuevo, setNuevo] = useState('')
+  const [error, setError] = useState(null)
+  const [guardando, setGuardando] = useState(false)
+  const [editandoId, setEditandoId] = useState(null)
+  const [editandoValor, setEditandoValor] = useState('')
+
+  async function handleAgregar(e) {
+    e.preventDefault()
+    if (!nuevo.trim()) return
+    setError(null)
+    setGuardando(true)
+    try {
+      await onAgregar(nuevo.trim())
+      setNuevo('')
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  function iniciarEdicion(item) {
+    setEditandoId(item.id)
+    setEditandoValor(item.nombre)
+    setError(null)
+  }
+
+  function cancelarEdicion() {
+    setEditandoId(null)
+    setEditandoValor('')
+  }
+
+  async function confirmarEdicion(id) {
+    const nombre = editandoValor.trim()
+    if (!nombre) return
+    setError(null)
+    try {
+      await onRenombrar(id, nombre)
+      setEditandoId(null)
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-gray-700 mb-2">{titulo}</h3>
+      <div className="border border-gray-200 rounded-lg overflow-hidden mb-2">
+        {items.length === 0
+          ? <p className="text-xs text-gray-400 px-3 py-3">Sin opciones</p>
+          : items.map(item => (
+            <div key={item.id} className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 last:border-0">
+              {editandoId === item.id ? (
+                <>
+                  <input
+                    autoFocus
+                    value={editandoValor}
+                    onChange={e => setEditandoValor(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') confirmarEdicion(item.id)
+                      if (e.key === 'Escape') cancelarEdicion()
+                    }}
+                    className="flex-1 border border-blue-400 rounded px-2 py-0.5 text-sm focus:outline-none"
+                  />
+                  <button onClick={() => confirmarEdicion(item.id)} className="text-green-600 hover:text-green-700">
+                    <Check size={14} />
+                  </button>
+                  <button onClick={cancelarEdicion} className="text-gray-400 hover:text-gray-600">
+                    <X size={14} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="flex-1 text-sm text-gray-700">{item.nombre}</span>
+                  <button onClick={() => iniciarEdicion(item)} className="text-gray-300 hover:text-blue-500 transition-colors">
+                    <Pencil size={13} />
+                  </button>
+                  <button onClick={() => onEliminar(item.id)} className="text-gray-300 hover:text-red-500 transition-colors">
+                    <X size={14} />
+                  </button>
+                </>
+              )}
+            </div>
+          ))
+        }
+      </div>
+      <form onSubmit={handleAgregar} className="flex gap-2">
+        <input
+          value={nuevo}
+          onChange={e => setNuevo(e.target.value)}
+          placeholder="Nuevo..."
+          className={`${inputClass} flex-1 text-sm`}
+        />
+        <button
+          type="submit"
+          disabled={guardando || !nuevo.trim()}
+          className="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-40"
+        >
+          <Plus size={14} />
+        </button>
+      </form>
+      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+    </div>
+  )
+}
+
 export default function Productos() {
   const [productos, setProductos] = useState([])
   const [familias, setFamilias] = useState([])
   const [categorias, setCategorias] = useState([])
+  const [materiales, setMateriales] = useState([])
+  const [tiposMedida, setTiposMedida] = useState([])
   const [filtros, setFiltros] = useState({ sku: '', familia_id: '', categoria_id: '', material: '', tipo_medida: '' })
   const [modal, setModal] = useState({ abierto: false, producto: null })
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState(null)
+  const [modalImportar, setModalImportar] = useState(false)
+  const [modalCatalogos, setModalCatalogos] = useState(false)
+
+  function cargarCatalogos() {
+    catalogosApi.getMateriales().then(setMateriales).catch(() => {})
+    catalogosApi.getTiposMedida().then(setTiposMedida).catch(() => {})
+  }
 
   useEffect(() => {
     getCategorias().then(setCategorias).catch(() => {})
     getFamilias().then(setFamilias).catch(() => {})
+    cargarCatalogos()
   }, [])
 
-  // Debounce: espera 300ms sin cambios antes de llamar a la API
   useEffect(() => {
     const id = setTimeout(() => {
       setCargando(true)
@@ -168,13 +284,15 @@ export default function Productos() {
     }
   }
 
-  const [modalImportar, setModalImportar] = useState(false)
-
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-xl font-semibold text-gray-800">Productos</h1>
         <div className="flex gap-2">
+          <button onClick={() => setModalCatalogos(true)}
+            className="flex items-center gap-2 border border-gray-300 text-gray-600 px-4 py-2 rounded text-sm hover:bg-gray-50">
+            <Settings size={15} /> Catálogos
+          </button>
           <button onClick={() => setModalImportar(true)}
             className="flex items-center gap-2 border border-gray-300 text-gray-600 px-4 py-2 rounded text-sm hover:bg-gray-50">
             <Upload size={15} /> Importar CSV
@@ -199,11 +317,11 @@ export default function Productos() {
         </select>
         <select value={filtros.material} onChange={setFiltro('material')} className={inputClass}>
           <option value="">Todos los materiales</option>
-          {MATERIALES.map(m => <option key={m} value={m}>{m}</option>)}
+          {materiales.map(m => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}
         </select>
         <select value={filtros.tipo_medida} onChange={setFiltro('tipo_medida')} className={inputClass}>
           <option value="">Todos los tipos</option>
-          {TIPOS_MEDIDA.map(t => <option key={t} value={t}>{t}</option>)}
+          {tiposMedida.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
         </select>
       </div>
 
@@ -264,6 +382,8 @@ export default function Productos() {
           <ProductoForm
             inicial={modal.producto}
             familias={familias}
+            materiales={materiales}
+            tiposMedida={tiposMedida}
             onGuardar={handleGuardar}
             onCancelar={cerrarModal}
           />
@@ -278,6 +398,45 @@ export default function Productos() {
               api.getProductos(filtros).then(setProductos)
             }}
           />
+        </Modal>
+      )}
+
+      {modalCatalogos && (
+        <Modal titulo="Catálogos" onCerrar={() => setModalCatalogos(false)}>
+          <div className="grid grid-cols-2 gap-6">
+            <CatalogoSeccion
+              titulo="Materiales"
+              items={materiales}
+              onAgregar={async nombre => {
+                await catalogosApi.createMaterial(nombre)
+                cargarCatalogos()
+              }}
+              onRenombrar={async (id, nombre) => {
+                await catalogosApi.updateMaterial(id, nombre)
+                cargarCatalogos()
+              }}
+              onEliminar={async id => {
+                await catalogosApi.deleteMaterial(id)
+                cargarCatalogos()
+              }}
+            />
+            <CatalogoSeccion
+              titulo="Tipos de medida"
+              items={tiposMedida}
+              onAgregar={async nombre => {
+                await catalogosApi.createTipoMedida(nombre)
+                cargarCatalogos()
+              }}
+              onRenombrar={async (id, nombre) => {
+                await catalogosApi.updateTipoMedida(id, nombre)
+                cargarCatalogos()
+              }}
+              onEliminar={async id => {
+                await catalogosApi.deleteTipoMedida(id)
+                cargarCatalogos()
+              }}
+            />
+          </div>
         </Modal>
       )}
     </div>
@@ -314,9 +473,9 @@ function ImportarCSV({ onImportado }) {
       const res = await fetch('/api/productos/importar', { method: 'POST', body: form })
       const data = await res.json()
       setResultado(data)
-      if (data.importados > 0) onImportado()
+      if (data.importados > 0 || data.actualizados > 0) onImportado()
     } catch {
-      setResultado({ importados: 0, omitidos: 0, errores: [{ fila: 0, sku: '', error: 'Error de conexión' }] })
+      setResultado({ importados: 0, actualizados: 0, errores: [{ fila: 0, sku: '', error: 'Error de conexión' }] })
     } finally {
       setImportando(false)
     }
@@ -328,11 +487,11 @@ function ImportarCSV({ onImportado }) {
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-green-50 rounded-lg p-3 text-center">
             <p className="text-2xl font-bold text-green-700">{resultado.importados}</p>
-            <p className="text-xs text-green-600 mt-0.5">Importados</p>
+            <p className="text-xs text-green-600 mt-0.5">Nuevos</p>
           </div>
-          <div className="bg-yellow-50 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-yellow-700">{resultado.omitidos}</p>
-            <p className="text-xs text-yellow-600 mt-0.5">Omitidos (SKU duplicado)</p>
+          <div className="bg-blue-50 rounded-lg p-3 text-center">
+            <p className="text-2xl font-bold text-blue-700">{resultado.actualizados}</p>
+            <p className="text-xs text-blue-600 mt-0.5">Actualizados</p>
           </div>
           <div className="bg-red-50 rounded-lg p-3 text-center">
             <p className="text-2xl font-bold text-red-700">{resultado.errores.length}</p>
@@ -371,7 +530,7 @@ function ImportarCSV({ onImportado }) {
         <p className="font-medium text-gray-700">Formato del archivo:</p>
         <p>Columnas requeridas: <code className="bg-white px-1 rounded border border-gray-200">sku</code>, <code className="bg-white px-1 rounded border border-gray-200">familia</code></p>
         <p>Columnas opcionales: <code className="bg-white px-1 rounded border border-gray-200">medida</code>, <code className="bg-white px-1 rounded border border-gray-200">material</code>, <code className="bg-white px-1 rounded border border-gray-200">tipo_medida</code>, <code className="bg-white px-1 rounded border border-gray-200">precio</code>, <code className="bg-white px-1 rounded border border-gray-200">costo</code>, <code className="bg-white px-1 rounded border border-gray-200">stock</code></p>
-        <p className="text-xs text-gray-500">Los SKU que ya existen se omiten sin error.</p>
+        <p className="text-xs text-gray-500">Si el SKU ya existe, se actualizará con la nueva información.</p>
       </div>
 
       <button
@@ -396,7 +555,7 @@ function ImportarCSV({ onImportado }) {
         />
         {archivo ? (
           <div className="flex items-center justify-center gap-2 text-green-700">
-            <CheckCircle size={18} />
+            <Upload size={18} />
             <span className="text-sm font-medium">{archivo.name}</span>
           </div>
         ) : (
