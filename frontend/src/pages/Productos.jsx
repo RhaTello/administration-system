@@ -327,6 +327,10 @@ export default function Productos() {
 
       {error && <div className="bg-red-50 text-red-700 text-sm p-3 rounded mb-4">{error}</div>}
 
+      <p className="text-xs text-gray-400 mb-2">
+        {cargando ? 'Cargando...' : `Mostrando ${productos.length} producto${productos.length !== 1 ? 's' : ''}`}
+      </p>
+
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
@@ -391,13 +395,14 @@ export default function Productos() {
       )}
 
       {modalImportar && (
-        <Modal titulo="Importar productos desde CSV" onCerrar={() => setModalImportar(false)}>
-          <ImportarCSV
-            onImportado={() => {
-              setModalImportar(false)
-              api.getProductos(filtros).then(setProductos)
-            }}
-          />
+        <Modal
+          titulo="Importar productos desde CSV"
+          onCerrar={() => {
+            setModalImportar(false)
+            api.getProductos(filtros).then(setProductos)
+          }}
+        >
+          <ImportarCSV />
         </Modal>
       )}
 
@@ -443,7 +448,7 @@ export default function Productos() {
   )
 }
 
-function ImportarCSV({ onImportado }) {
+function ImportarCSV() {
   const inputRef = useRef(null)
   const [archivo, setArchivo] = useState(null)
   const [importando, setImportando] = useState(false)
@@ -473,7 +478,6 @@ function ImportarCSV({ onImportado }) {
       const res = await fetch('/api/productos/importar', { method: 'POST', body: form })
       const data = await res.json()
       setResultado(data)
-      if (data.importados > 0 || data.actualizados > 0) onImportado()
     } catch {
       setResultado({ importados: 0, actualizados: 0, errores: [{ fila: 0, sku: '', error: 'Error de conexión' }] })
     } finally {
