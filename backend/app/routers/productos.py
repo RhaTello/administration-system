@@ -129,7 +129,13 @@ async def importar_productos(archivo: UploadFile = File(...), db: Session = Depe
         raise HTTPException(status_code=400, detail="El CSV debe tener al menos las columnas: sku, familia")
 
     # Caches para no hacer queries por fila
-    familias = {f.nombre.lower(): f for f in db.query(models.Familia).all()}
+    # familias_unicas: nombre → familia (solo si no hay duplicados con ese nombre)
+    # familias_duplicadas: nombres que aparecen en más de una categoría
+    todas_familias = db.query(models.Familia).options(joinedload(models.Familia.categoria)).all()
+    familias_por_nombre: dict[str, list] = {}
+    for f in todas_familias:
+        familias_por_nombre.setdefault(f.nombre.lower(), []).append(f)
+
     # Mapeo normalizado → nombre canónico en DB
     tipos_medida_map = {_normalizar(t.nombre): t.nombre for t in db.query(models.TipoMedida).all()}
     materiales_map = {_normalizar(m.nombre): m.nombre for m in db.query(models.Material).all()}
@@ -149,10 +155,29 @@ async def importar_productos(archivo: UploadFile = File(...), db: Session = Depe
             errores.append({"fila": i, "sku": sku, "error": "Familia vacía"})
             continue
 
-        familia = familias.get(familia_nombre.lower())
-        if not familia:
+        categoria_nombre = fila.get("categoria", "").strip() if "categoria" in (reader.fieldnames or []) else ""
+        candidatas = familias_por_nombre.get(familia_nombre.lower(), [])
+
+        if not candidatas:
             errores.append({"fila": i, "sku": sku, "error": f"Familia '{familia_nombre}' no encontrada"})
             continue
+
+        if len(candidatas) > 1:
+            if not categoria_nombre:
+                nombres_cat = ", ".join(f.categoria.nombre for f in candidatas)
+                errores.append({"fila": i, "sku": sku, "error": f"Familia '{familia_nombre}' existe en varias categorías ({nombres_cat}). Agrega la columna 'categoria' al CSV."})
+                continue
+            matches = [f for f in candidatas if f.categoria.nombre.lower() == categoria_nombre.lower()]
+            if not matches:
+                errores.append({"fila": i, "sku": sku, "error": f"Familia '{familia_nombre}' no encontrada en categoría '{categoria_nombre}'"})
+                continue
+            familia = matches[0]
+        else:
+            familia = candidatas[0]
+            # Si se proporcionó categoría, validar que coincida
+            if categoria_nombre and familia.categoria.nombre.lower() != categoria_nombre.lower():
+                errores.append({"fila": i, "sku": sku, "error": f"Familia '{familia_nombre}' no pertenece a la categoría '{categoria_nombre}'"})
+                continue
 
         # Resolución flexible de tipo_medida (acepta variaciones de mayúsculas/acentos)
         tipo_medida_raw = fila.get("tipo_medida", "").strip()

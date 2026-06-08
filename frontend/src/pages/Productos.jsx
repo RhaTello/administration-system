@@ -456,9 +456,9 @@ function ImportarCSV() {
 
   function descargarPlantilla() {
     const filas = [
-      'sku,familia,medida,material,tipo_medida,precio,costo,stock',
-      'M6X20,Hexagonal,M6x20,Gr-5,milimétrico,2.50,1.20,100',
-      '1/4X1,Hexagonal,1/4"x1",Gr-5,fraccional,1.80,0.90,200',
+      'sku,categoria,familia,medida,material,tipo_medida,precio,costo,stock',
+      'M6X20,Pijas,Hexagonal,M6x20,Gr-5,milimétrico,2.50,1.20,100',
+      '1/4X1,Pijas,Hexagonal,1/4"x1",Gr-5,fraccional,1.80,0.90,200',
     ]
     const blob = new Blob([filas.join('\n')], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -533,8 +533,9 @@ function ImportarCSV() {
       <div className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3 space-y-1">
         <p className="font-medium text-gray-700">Formato del archivo:</p>
         <p>Columnas requeridas: <code className="bg-white px-1 rounded border border-gray-200">sku</code>, <code className="bg-white px-1 rounded border border-gray-200">familia</code></p>
-        <p>Columnas opcionales: <code className="bg-white px-1 rounded border border-gray-200">medida</code>, <code className="bg-white px-1 rounded border border-gray-200">material</code>, <code className="bg-white px-1 rounded border border-gray-200">tipo_medida</code>, <code className="bg-white px-1 rounded border border-gray-200">precio</code>, <code className="bg-white px-1 rounded border border-gray-200">costo</code>, <code className="bg-white px-1 rounded border border-gray-200">stock</code></p>
+        <p>Columnas opcionales: <code className="bg-white px-1 rounded border border-gray-200">categoria</code>, <code className="bg-white px-1 rounded border border-gray-200">medida</code>, <code className="bg-white px-1 rounded border border-gray-200">material</code>, <code className="bg-white px-1 rounded border border-gray-200">tipo_medida</code>, <code className="bg-white px-1 rounded border border-gray-200">precio</code>, <code className="bg-white px-1 rounded border border-gray-200">costo</code>, <code className="bg-white px-1 rounded border border-gray-200">stock</code></p>
         <p className="text-xs text-gray-500">Si el SKU ya existe, se actualizará con la nueva información.</p>
+        <p className="text-xs text-amber-600">Si hay dos familias con el mismo nombre en distintas categorías, la columna <code className="bg-white px-1 rounded border border-gray-200">categoria</code> es obligatoria para esas filas.</p>
       </div>
 
       <button
