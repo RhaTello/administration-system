@@ -274,6 +274,30 @@ export default function Productos() {
     setProductos(actualizados)
   }
 
+  function handleExportar() {
+    const encabezado = 'sku,categoria,familia,medida,material,tipo_medida,precio,costo,stock'
+    const filas = productos.map(p => [
+      p.sku,
+      p.familia.categoria.nombre,
+      p.familia.nombre,
+      p.medida ?? '',
+      p.material ?? '',
+      p.tipo_medida ?? '',
+      p.precio ?? '',
+      p.costo ?? '',
+      p.stock,
+    ].map(v => (String(v).includes(',') ? `"${v}"` : v)).join(','))
+
+    const csv = [encabezado, ...filas].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `productos_${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   async function handleEliminar(id) {
     if (!confirm('¿Eliminar este producto?')) return
     try {
@@ -292,6 +316,13 @@ export default function Productos() {
           <button onClick={() => setModalCatalogos(true)}
             className="flex items-center gap-2 border border-gray-300 text-gray-600 px-4 py-2 rounded text-sm hover:bg-gray-50">
             <Settings size={15} /> Catálogos
+          </button>
+          <button
+            onClick={handleExportar}
+            disabled={productos.length === 0}
+            className="flex items-center gap-2 border border-gray-300 text-gray-600 px-4 py-2 rounded text-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Download size={15} /> Exportar CSV
           </button>
           <button onClick={() => setModalImportar(true)}
             className="flex items-center gap-2 border border-gray-300 text-gray-600 px-4 py-2 rounded text-sm hover:bg-gray-50">
