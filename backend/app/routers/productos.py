@@ -206,6 +206,8 @@ async def importar_productos(archivo: UploadFile = File(...), db: Session = Depe
             costo = float(costo_str) if costo_str else None
             stock = int(stock_str) if stock_str else 0
             medida = fila.get("medida", "").strip() or None
+            clave_prod_serv = fila.get("clave_prod_serv", "").strip().upper() or None
+            clave_unidad = fila.get("clave_unidad", "").strip().upper() or None
 
             existente = db.query(models.Producto).filter(models.Producto.sku == sku).first()
             if existente:
@@ -216,6 +218,10 @@ async def importar_productos(archivo: UploadFile = File(...), db: Session = Depe
                 existente.precio = precio
                 existente.costo = costo
                 existente.stock = stock
+                if clave_prod_serv is not None:
+                    existente.clave_prod_serv = clave_prod_serv
+                if clave_unidad is not None:
+                    existente.clave_unidad = clave_unidad
                 actualizados += 1
             else:
                 db.add(models.Producto(
@@ -227,6 +233,8 @@ async def importar_productos(archivo: UploadFile = File(...), db: Session = Depe
                     precio=precio,
                     costo=costo,
                     stock=stock,
+                    clave_prod_serv=clave_prod_serv,
+                    clave_unidad=clave_unidad,
                 ))
                 importados += 1
         except ValueError as e:

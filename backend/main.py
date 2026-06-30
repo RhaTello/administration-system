@@ -1,10 +1,13 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.database import engine
 from app import models
-from app.routers import health, productos, categorias, familias, ventas, estadisticas, catalogos
+from app.routers import health, productos, categorias, familias, ventas, estadisticas, catalogos, cotizaciones, clientes_fiscales, facturas
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -14,7 +17,17 @@ with engine.connect() as conn:
         conn.execute(text("ALTER TABLE ventas ADD COLUMN descuento REAL NOT NULL DEFAULT 0"))
         conn.commit()
     except Exception:
-        pass  # La columna ya existe
+        pass
+    try:
+        conn.execute(text("ALTER TABLE productos ADD COLUMN clave_prod_serv TEXT"))
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        conn.execute(text("ALTER TABLE productos ADD COLUMN clave_unidad TEXT"))
+        conn.commit()
+    except Exception:
+        pass
 
 # Seed de catálogos iniciales (solo si las tablas están vacías)
 with Session(engine) as session:
@@ -44,6 +57,9 @@ app.include_router(familias.router, prefix="/api")
 app.include_router(ventas.router, prefix="/api")
 app.include_router(estadisticas.router, prefix="/api")
 app.include_router(catalogos.router, prefix="/api")
+app.include_router(cotizaciones.router, prefix="/api")
+app.include_router(clientes_fiscales.router, prefix="/api")
+app.include_router(facturas.router, prefix="/api")
 
 
 if __name__ == "__main__":

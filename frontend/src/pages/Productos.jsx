@@ -19,6 +19,8 @@ function ProductoForm({ inicial, familias, materiales, tiposMedida, onGuardar, o
     precio: inicial?.precio ?? '',
     costo: inicial?.costo ?? '',
     stock: inicial?.stock ?? 0,
+    clave_prod_serv: inicial?.clave_prod_serv ?? '',
+    clave_unidad: inicial?.clave_unidad ?? '',
   })
   const [error, setError] = useState(null)
   const [guardando, setGuardando] = useState(false)
@@ -39,6 +41,8 @@ function ProductoForm({ inicial, familias, materiales, tiposMedida, onGuardar, o
         precio: form.precio !== '' ? Number(form.precio) : null,
         costo: form.costo !== '' ? Number(form.costo) : null,
         stock: Number(form.stock),
+        clave_prod_serv: form.clave_prod_serv.trim().toUpperCase() || null,
+        clave_unidad: form.clave_unidad.trim().toUpperCase() || null,
       })
     } catch (e) {
       setError(e.message)
@@ -94,6 +98,23 @@ function ProductoForm({ inicial, familias, materiales, tiposMedida, onGuardar, o
           <input type="number" step="0.01" min="0" value={form.costo} onChange={set('costo')} placeholder="0.00" className={`${inputClass} w-full`} />
         </div>
       </div>
+
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide pt-1">Datos fiscales SAT</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={labelClass}>Clave prod/serv</label>
+          <input value={form.clave_prod_serv} onChange={set('clave_prod_serv')}
+            placeholder="ej. 31161500"
+            className={`${inputClass} w-full`} maxLength={10} />
+        </div>
+        <div>
+          <label className={labelClass}>Clave unidad</label>
+          <input value={form.clave_unidad} onChange={set('clave_unidad')}
+            placeholder="ej. H87"
+            className={`${inputClass} w-full`} maxLength={10} />
+        </div>
+      </div>
+
       <div className="flex justify-end gap-2 pt-2">
         <button type="button" onClick={onCancelar} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded hover:bg-gray-200">
           Cancelar
@@ -275,7 +296,7 @@ export default function Productos() {
   }
 
   function handleExportar() {
-    const encabezado = 'sku,categoria,familia,medida,material,tipo_medida,precio,costo,stock'
+    const encabezado = 'sku,categoria,familia,medida,material,tipo_medida,precio,costo,stock,clave_prod_serv,clave_unidad'
     const filas = productos.map(p => [
       p.sku,
       p.familia.categoria.nombre,
@@ -286,6 +307,8 @@ export default function Productos() {
       p.precio ?? '',
       p.costo ?? '',
       p.stock,
+      p.clave_prod_serv ?? '',
+      p.clave_unidad ?? '',
     ].map(v => (String(v).includes(',') ? `"${v}"` : v)).join(','))
 
     const csv = [encabezado, ...filas].join('\n')
@@ -487,9 +510,9 @@ function ImportarCSV() {
 
   function descargarPlantilla() {
     const filas = [
-      'sku,categoria,familia,medida,material,tipo_medida,precio,costo,stock',
-      'M6X20,Pijas,Hexagonal,M6x20,Gr-5,milimétrico,2.50,1.20,100',
-      '1/4X1,Pijas,Hexagonal,1/4"x1",Gr-5,fraccional,1.80,0.90,200',
+      'sku,categoria,familia,medida,material,tipo_medida,precio,costo,stock,clave_prod_serv,clave_unidad',
+      'M6X20,Pijas,Hexagonal,M6x20,Gr-5,milimétrico,2.50,1.20,100,31161500,H87',
+      '1/4X1,Pijas,Hexagonal,1/4"x1",Gr-5,fraccional,1.80,0.90,200,31161500,H87',
     ]
     const blob = new Blob([filas.join('\n')], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)

@@ -14,8 +14,12 @@ export default function Layout() {
         <nav className="flex-1 p-3 space-y-0.5">
           <p className="text-xs font-semibold text-gray-400 uppercase px-3 pt-2 pb-1">Ventas</p>
           <NavLink to="/ventas" className={linkClass}>Nueva venta</NavLink>
+          <NavLink to="/cotizaciones" className={linkClass}>Cotizaciones</NavLink>
           <NavLink to="/historial" className={linkClass}>Historial</NavLink>
           <NavLink to="/estadisticas" className={linkClass}>Estadísticas</NavLink>
+          <p className="text-xs font-semibold text-gray-400 uppercase px-3 pt-3 pb-1">Facturación</p>
+          <NavLink to="/clientes-fiscales" className={linkClass}>Clientes</NavLink>
+          <NavLink to="/facturas" className={linkClass}>Facturas</NavLink>
           <p className="text-xs font-semibold text-gray-400 uppercase px-3 pt-3 pb-1">Inventario</p>
           <NavLink to="/productos" className={linkClass}>Productos</NavLink>
           <NavLink to="/categorias" className={linkClass}>Categorías</NavLink>

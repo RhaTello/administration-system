@@ -6,6 +6,9 @@ import Estadisticas from './pages/Estadisticas'
 import Productos from './pages/Productos'
 import Categorias from './pages/Categorias'
 import Familias from './pages/Familias'
+import Cotizaciones from './pages/Cotizaciones'
+import ClientesFiscales from './pages/ClientesFiscales'
+import Facturas from './pages/Facturas'
 
 export default function App() {
   return (
@@ -14,11 +17,14 @@ export default function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Navigate to="/ventas" replace />} />
           <Route path="ventas" element={<Ventas />} />
+          <Route path="cotizaciones" element={<Cotizaciones />} />
           <Route path="historial" element={<Historial />} />
           <Route path="estadisticas" element={<Estadisticas />} />
           <Route path="productos" element={<Productos />} />
           <Route path="categorias" element={<Categorias />} />
           <Route path="familias" element={<Familias />} />
+          <Route path="clientes-fiscales" element={<ClientesFiscales />} />
+          <Route path="facturas" element={<Facturas />} />
         </Route>
       </Routes>
     </BrowserRouter>
