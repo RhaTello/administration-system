@@ -35,3 +35,21 @@ export async function cancelarFactura(id, motivo = '02') {
   if (!res.ok) throw new Error(await parseError(res))
   return res.json()
 }
+
+export async function createComplementoPago(facturaId, data) {
+  const res = await fetch(`${BASE}/${facturaId}/pagos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error(await parseError(res))
+  return res.json()
+}
+
+export function urlPdfComplemento(pagoId) {
+  return `${BASE}/pagos/${pagoId}/pdf`
+}
+
+export function urlXmlComplemento(pagoId) {
+  return `${BASE}/pagos/${pagoId}/xml`
+}

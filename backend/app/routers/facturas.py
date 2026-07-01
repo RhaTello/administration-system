@@ -3,10 +3,10 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app import models
-from app.schemas import FacturaCreate, FacturaResponse
+from app.schemas import FacturaCreate, FacturaResponse, ComplementoPagoCreate, ComplementoPagoResponse
 from app.services import facturapi as fapi
 
 router = APIRouter(prefix="/facturas", tags=["facturas"])
@@ -24,13 +24,30 @@ def _check_key():
         raise HTTPException(status_code=400, detail="FACTURAPI_API_KEY no está configurada en el .env")
 
 
+def _get_factura(factura_id: int, db: Session) -> models.Factura:
+    f = (
+        db.query(models.Factura)
+        .options(joinedload(models.Factura.pagos))
+        .filter(models.Factura.id == factura_id)
+        .first()
+    )
+    if not f:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+    return f
+
+
 class CancelBody(BaseModel):
     motivo: str = "02"
 
 
 @router.get("/", response_model=list[FacturaResponse])
 def listar_facturas(db: Session = Depends(get_db)):
-    return db.query(models.Factura).order_by(models.Factura.fecha.desc()).all()
+    return (
+        db.query(models.Factura)
+        .options(joinedload(models.Factura.pagos))
+        .order_by(models.Factura.fecha.desc())
+        .all()
+    )
 
 
 @router.post("/", response_model=FacturaResponse, status_code=201)
@@ -81,8 +98,12 @@ def crear_factura(datos: FacturaCreate, db: Session = Depends(get_db)):
         subtotal = float(inv.get("subtotal", 0))
         total = float(inv.get("total", 0))
 
+        stamp = inv.get("stamp") or {}
+        uuid = stamp.get("uuid") or inv.get("uuid")
+
         factura = models.Factura(
             facturapi_id=inv["id"],
+            uuid=uuid,
             folio=f"{series}{numero}" if (series or numero) else None,
             fecha=datetime.now(),
             cliente_id=cliente.id,
@@ -112,9 +133,7 @@ def crear_factura(datos: FacturaCreate, db: Session = Depends(get_db)):
 @router.get("/{factura_id}/pdf")
 def descargar_pdf(factura_id: int, db: Session = Depends(get_db)):
     _check_key()
-    factura = db.query(models.Factura).filter(models.Factura.id == factura_id).first()
-    if not factura:
-        raise HTTPException(status_code=404, detail="Factura no encontrada")
+    factura = _get_factura(factura_id, db)
     try:
         with fapi.http_client() as http:
             r = http.get(f"/invoices/{factura.facturapi_id}/pdf")
@@ -133,9 +152,7 @@ def descargar_pdf(factura_id: int, db: Session = Depends(get_db)):
 @router.get("/{factura_id}/xml")
 def descargar_xml(factura_id: int, db: Session = Depends(get_db)):
     _check_key()
-    factura = db.query(models.Factura).filter(models.Factura.id == factura_id).first()
-    if not factura:
-        raise HTTPException(status_code=404, detail="Factura no encontrada")
+    factura = _get_factura(factura_id, db)
     try:
         with fapi.http_client() as http:
             r = http.get(f"/invoices/{factura.facturapi_id}/xml")
@@ -154,9 +171,7 @@ def descargar_xml(factura_id: int, db: Session = Depends(get_db)):
 @router.post("/{factura_id}/cancelar")
 def cancelar_factura(factura_id: int, body: CancelBody = CancelBody(), db: Session = Depends(get_db)):
     _check_key()
-    factura = db.query(models.Factura).filter(models.Factura.id == factura_id).first()
-    if not factura:
-        raise HTTPException(status_code=404, detail="Factura no encontrada")
+    factura = _get_factura(factura_id, db)
     if factura.status == "canceled":
         raise HTTPException(status_code=400, detail="La factura ya está cancelada")
     if body.motivo not in MOTIVOS_CANCELACION:
@@ -176,3 +191,134 @@ def cancelar_factura(factura_id: int, body: CancelBody = CancelBody(), db: Sessi
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── Complementos de pago ──────────────────────────────────────────────────────
+
+@router.post("/{factura_id}/pagos", response_model=ComplementoPagoResponse, status_code=201)
+def crear_complemento_pago(factura_id: int, datos: ComplementoPagoCreate, db: Session = Depends(get_db)):
+    _check_key()
+    factura = _get_factura(factura_id, db)
+
+    if factura.status == "canceled":
+        raise HTTPException(status_code=400, detail="La factura está cancelada")
+    if factura.metodo_pago != "PPD":
+        raise HTTPException(status_code=400, detail="Solo las facturas PPD requieren complemento de pago")
+    if not factura.uuid:
+        raise HTTPException(
+            status_code=400,
+            detail="La factura no tiene UUID registrado. Fue creada antes de la actualización; crea una nueva factura PPD.",
+        )
+
+    pagos_validos = [p for p in factura.pagos if p.status == "valid"]
+    numero_parcialidad = len(pagos_validos) + 1
+    saldo_anterior = round(factura.total - sum(p.monto for p in pagos_validos), 2)
+
+    if datos.monto > saldo_anterior + 0.01:
+        raise HTTPException(status_code=400, detail=f"El monto excede el saldo pendiente (${saldo_anterior:.2f})")
+
+    saldo_insoluto = round(saldo_anterior - datos.monto, 2)
+
+    cliente = db.query(models.ClienteFiscal).filter(models.ClienteFiscal.id == factura.cliente_id).first()
+    if not cliente or not cliente.facturapi_id:
+        raise HTTPException(status_code=400, detail="Cliente no encontrado o no sincronizado con Facturapi")
+
+    fecha_str = datos.fecha_pago.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+    payload = {
+        "customer": cliente.facturapi_id,
+        "type": "P",
+        "payments": [{
+            "form": datos.forma_pago,
+            "date": fecha_str,
+            "currency": "MXN",
+            "exchange_rate": 1,
+            "amount": datos.monto,
+            "related_documents": [{
+                "uuid": factura.uuid,
+                "amount": datos.monto,
+                "installment": numero_parcialidad,
+                "last_balance": saldo_anterior,
+                "currency": "MXN",
+                "exchange_rate": 1,
+            }],
+        }],
+    }
+
+    try:
+        with fapi.http_client() as http:
+            r = http.post("/invoices", json=payload)
+        if not r.is_success:
+            detalle = r.json().get("message", r.text) if r.content else r.text
+            raise HTTPException(status_code=400, detail=f"Facturapi: {detalle}")
+
+        inv = r.json()
+        series = inv.get("series") or ""
+        numero = inv.get("folio_number") or ""
+
+        complemento = models.ComplementoPago(
+            facturapi_id=inv["id"],
+            folio=f"{series}{numero}" if (series or numero) else None,
+            fecha=datetime.now(),
+            fecha_pago=datos.fecha_pago,
+            factura_id=factura_id,
+            cliente_razon_social=factura.cliente_razon_social,
+            monto=datos.monto,
+            forma_pago=datos.forma_pago,
+            numero_parcialidad=numero_parcialidad,
+            saldo_anterior=saldo_anterior,
+            saldo_insoluto=saldo_insoluto,
+        )
+        db.add(complemento)
+        db.commit()
+        db.refresh(complemento)
+        return complemento
+
+    except httpx.ConnectError:
+        raise HTTPException(status_code=400, detail="No se pudo conectar a Facturapi")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/pagos/{pago_id}/pdf")
+def descargar_pdf_complemento(pago_id: int, db: Session = Depends(get_db)):
+    _check_key()
+    pago = db.query(models.ComplementoPago).filter(models.ComplementoPago.id == pago_id).first()
+    if not pago:
+        raise HTTPException(status_code=404, detail="Complemento de pago no encontrado")
+    try:
+        with fapi.http_client() as http:
+            r = http.get(f"/invoices/{pago.facturapi_id}/pdf")
+        if not r.is_success:
+            raise HTTPException(status_code=400, detail=f"Facturapi: {r.text}")
+        nombre = f"complemento_{pago.folio or pago.id}.pdf"
+        return StreamingResponse(
+            iter([r.content]),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+        )
+    except httpx.ConnectError:
+        raise HTTPException(status_code=400, detail="No se pudo conectar a Facturapi")
+
+
+@router.get("/pagos/{pago_id}/xml")
+def descargar_xml_complemento(pago_id: int, db: Session = Depends(get_db)):
+    _check_key()
+    pago = db.query(models.ComplementoPago).filter(models.ComplementoPago.id == pago_id).first()
+    if not pago:
+        raise HTTPException(status_code=404, detail="Complemento de pago no encontrado")
+    try:
+        with fapi.http_client() as http:
+            r = http.get(f"/invoices/{pago.facturapi_id}/xml")
+        if not r.is_success:
+            raise HTTPException(status_code=400, detail=f"Facturapi: {r.text}")
+        nombre = f"complemento_{pago.folio or pago.id}.xml"
+        return StreamingResponse(
+            iter([r.content]),
+            media_type="application/xml",
+            headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+        )
+    except httpx.ConnectError:
+        raise HTTPException(status_code=400, detail="No se pudo conectar a Facturapi")

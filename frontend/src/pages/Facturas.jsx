@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Minus, Trash2, AlertCircle, CheckCircle, FileText, Download, XCircle } from 'lucide-react'
+import { Plus, Minus, Trash2, AlertCircle, CheckCircle, FileText, Download, XCircle, CreditCard } from 'lucide-react'
 import * as api from '../api/facturas'
 import { getClientesFiscales } from '../api/clientesFiscales'
 import { getProductos } from '../api/productos'
@@ -75,6 +75,142 @@ function ModalCancelar({ factura, onCancelar, onCerrar }) {
   )
 }
 
+// ── Modal complemento de pago ─────────────────────────────────────────────────
+
+function ModalPago({ factura, onCerrar, onPagado }) {
+  const pagosValidos = (factura.pagos || []).filter(p => p.status === 'valid')
+  const pagado = pagosValidos.reduce((s, p) => s + p.monto, 0)
+  const saldo = factura.total - pagado
+
+  const hoy = new Date()
+  const hoyCadena = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}T12:00`
+
+  const [form, setForm] = useState({
+    fecha_pago: hoyCadena,
+    forma_pago: factura.forma_pago || '03',
+    monto: saldo > 0 ? saldo.toFixed(2) : '',
+  })
+  const [registrando, setRegistrando] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function handleRegistrar() {
+    if (!form.forma_pago) { setError('Selecciona la forma de pago'); return }
+    if (!form.monto || Number(form.monto) <= 0) { setError('Ingresa un monto válido'); return }
+    setRegistrando(true)
+    setError(null)
+    try {
+      await api.createComplementoPago(factura.id, {
+        fecha_pago: form.fecha_pago,
+        forma_pago: form.forma_pago,
+        monto: Number(form.monto),
+      })
+      onPagado()
+      onCerrar()
+    } catch (e) {
+      setError(e.message)
+      setRegistrando(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="font-semibold text-gray-800">Registrar pago</h2>
+            <p className="text-xs text-gray-500 mt-0.5">{factura.folio || `#${factura.id}`} · {factura.cliente_razon_social}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-gray-400">Saldo pendiente</p>
+            <p className="text-lg font-bold text-blue-600">{fmt(saldo)}</p>
+          </div>
+        </div>
+
+        {/* Pagos anteriores */}
+        {pagosValidos.length > 0 && (
+          <div className="bg-gray-50 rounded-lg p-3 space-y-1.5">
+            <p className="text-xs font-medium text-gray-500 mb-2">Pagos registrados</p>
+            {pagosValidos.map(p => (
+              <div key={p.id} className="flex items-center justify-between text-xs">
+                <span className="text-gray-500">
+                  Parcialidad {p.numero_parcialidad} · {new Date(p.fecha_pago).toLocaleDateString('es-MX')}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-gray-700">{fmt(p.monto)}</span>
+                  <button onClick={() => window.open(api.urlPdfComplemento(p.id), '_blank')}
+                    title="PDF" className="text-gray-400 hover:text-red-500">
+                    <FileText size={12} />
+                  </button>
+                  <button onClick={() => window.open(api.urlXmlComplemento(p.id), '_blank')}
+                    title="XML" className="text-gray-400 hover:text-blue-500">
+                    <Download size={12} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {saldo <= 0 ? (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+            <CheckCircle size={20} className="text-green-500 mx-auto mb-1" />
+            <p className="text-sm text-green-700 font-medium">Factura liquidada</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>Fecha de pago *</label>
+                <input type="datetime-local" value={form.fecha_pago}
+                  onChange={e => setForm(f => ({ ...f, fecha_pago: e.target.value }))}
+                  className={`${inputClass} w-full`} />
+              </div>
+              <div>
+                <label className={labelClass}>Forma de pago *</label>
+                <select value={form.forma_pago}
+                  onChange={e => setForm(f => ({ ...f, forma_pago: e.target.value }))}
+                  className={`${inputClass} w-full`}>
+                  <option value="">— Forma —</option>
+                  {FORMAS_PAGO.map(fp => (
+                    <option key={fp.clave} value={fp.clave}>{fp.clave} — {fp.descripcion}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className={labelClass}>Monto a pagar *</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                <input type="number" min="0.01" step="0.01" max={saldo}
+                  value={form.monto}
+                  onChange={e => setForm(f => ({ ...f, monto: e.target.value }))}
+                  className={`${inputClass} w-full pl-7`} />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Parcialidad {pagosValidos.length + 1} de {fmt(factura.total)}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded">{error}</p>}
+
+        <div className="flex gap-2 justify-end">
+          <button onClick={onCerrar} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded hover:bg-gray-200">
+            Cerrar
+          </button>
+          {saldo > 0 && (
+            <button onClick={handleRegistrar} disabled={registrando}
+              className="px-4 py-2 text-sm text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50">
+              {registrando ? 'Timbrando...' : 'Timbrar complemento'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export default function Facturas() {
@@ -100,6 +236,7 @@ export default function Facturas() {
   const [facturas, setFacturas] = useState([])
   const [cargandoHistorial, setCargandoHistorial] = useState(false)
   const [modalCancelar, setModalCancelar] = useState(null)
+  const [modalPago, setModalPago] = useState(null)
 
   useEffect(() => {
     getCategorias().then(setCategorias).catch(() => {})
@@ -210,6 +347,10 @@ export default function Facturas() {
     } finally {
       setTimbrando(false)
     }
+  }
+
+  function recargarHistorial() {
+    api.getFacturas().then(setFacturas).catch(() => {})
   }
 
   async function handleCancelar(id, motivo) {
@@ -473,51 +614,71 @@ export default function Facturas() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
                 <tr>
-                  {['Folio', 'Fecha', 'Cliente', 'RFC', 'Subtotal', 'IVA', 'Total', 'Método', 'Estado', ''].map(h => (
+                  {['Folio', 'Fecha', 'Cliente', 'RFC', 'Subtotal', 'IVA', 'Total', 'Saldo', 'Método', 'Estado', ''].map(h => (
                     <th key={h} className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {facturas.map(f => (
-                  <tr key={f.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-mono text-gray-700">{f.folio || `#${f.id}`}</td>
-                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
-                      {new Date(f.fecha).toLocaleDateString('es-MX')}
-                    </td>
-                    <td className="px-4 py-3 text-gray-800 max-w-[160px] truncate">{f.cliente_razon_social}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{f.cliente_rfc}</td>
-                    <td className="px-4 py-3 text-right text-gray-700">{fmt(f.subtotal)}</td>
-                    <td className="px-4 py-3 text-right text-gray-500">{fmt(f.iva)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-800">{fmt(f.total)}</td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">{f.metodo_pago}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {f.status === 'valid'
-                        ? <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">Vigente</span>
-                        : <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded">Cancelada</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => descargar(api.urlPdf(f.id))} title="PDF"
-                          className="text-gray-400 hover:text-red-500 transition-colors">
-                          <FileText size={15} />
-                        </button>
-                        <button onClick={() => descargar(api.urlXml(f.id))} title="XML"
-                          className="text-gray-400 hover:text-blue-500 transition-colors">
-                          <Download size={15} />
-                        </button>
-                        {f.status === 'valid' && (
-                          <button onClick={() => setModalCancelar(f)} title="Cancelar"
-                            className="text-gray-400 hover:text-red-600 transition-colors">
-                            <XCircle size={15} />
+                {facturas.map(f => {
+                  const pagado = (f.pagos || []).filter(p => p.status === 'valid').reduce((s, p) => s + p.monto, 0)
+                  const saldo = f.total - pagado
+                  const esPPD = f.metodo_pago === 'PPD'
+                  const tieneSaldo = esPPD && saldo > 0.01 && f.status === 'valid'
+                  return (
+                    <tr key={f.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-mono text-gray-700">{f.folio || `#${f.id}`}</td>
+                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                        {new Date(f.fecha).toLocaleDateString('es-MX')}
+                      </td>
+                      <td className="px-4 py-3 text-gray-800 max-w-[160px] truncate">{f.cliente_razon_social}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-gray-500">{f.cliente_rfc}</td>
+                      <td className="px-4 py-3 text-right text-gray-700">{fmt(f.subtotal)}</td>
+                      <td className="px-4 py-3 text-right text-gray-500">{fmt(f.iva)}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-gray-800">{fmt(f.total)}</td>
+                      <td className="px-4 py-3 text-right">
+                        {esPPD
+                          ? <span className={`text-xs font-semibold ${saldo > 0.01 ? 'text-amber-600' : 'text-green-600'}`}>
+                              {fmt(saldo)}
+                            </span>
+                          : <span className="text-xs text-gray-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">{f.metodo_pago}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {f.status === 'valid'
+                          ? <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">Vigente</span>
+                          : <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded">Cancelada</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => descargar(api.urlPdf(f.id))} title="PDF"
+                            className="text-gray-400 hover:text-red-500 transition-colors">
+                            <FileText size={15} />
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          <button onClick={() => descargar(api.urlXml(f.id))} title="XML"
+                            className="text-gray-400 hover:text-blue-500 transition-colors">
+                            <Download size={15} />
+                          </button>
+                          {esPPD && f.status === 'valid' && (
+                            <button onClick={() => setModalPago(f)}
+                              title={tieneSaldo ? 'Registrar pago' : 'Ver pagos'}
+                              className={`transition-colors ${tieneSaldo ? 'text-amber-500 hover:text-amber-700' : 'text-gray-300 hover:text-gray-500'}`}>
+                              <CreditCard size={15} />
+                            </button>
+                          )}
+                          {f.status === 'valid' && (
+                            <button onClick={() => setModalCancelar(f)} title="Cancelar"
+                              className="text-gray-400 hover:text-red-600 transition-colors">
+                              <XCircle size={15} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           )}
@@ -529,6 +690,17 @@ export default function Facturas() {
           factura={modalCancelar}
           onCancelar={handleCancelar}
           onCerrar={() => setModalCancelar(null)}
+        />
+      )}
+
+      {modalPago && (
+        <ModalPago
+          factura={modalPago}
+          onCerrar={() => setModalPago(null)}
+          onPagado={() => {
+            setModalPago(null)
+            recargarHistorial()
+          }}
         />
       )}
     </div>

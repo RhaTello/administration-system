@@ -225,9 +225,33 @@ class FacturaCreate(BaseModel):
     metodo_pago: str = "PUE"
 
 
+class ComplementoPagoCreate(BaseModel):
+    fecha_pago: datetime
+    forma_pago: str
+    monto: float = Field(gt=0)
+
+
+class ComplementoPagoResponse(BaseModel):
+    id: int
+    facturapi_id: str
+    folio: str | None
+    fecha: datetime
+    fecha_pago: datetime
+    factura_id: int
+    cliente_razon_social: str
+    monto: float
+    forma_pago: str
+    numero_parcialidad: int
+    saldo_anterior: float
+    saldo_insoluto: float
+    status: str
+    model_config = ConfigDict(from_attributes=True)
+
+
 class FacturaResponse(BaseModel):
     id: int
     facturapi_id: str
+    uuid: str | None
     folio: str | None
     fecha: datetime
     cliente_id: int | None
@@ -240,6 +264,7 @@ class FacturaResponse(BaseModel):
     forma_pago: str | None
     metodo_pago: str | None
     status: str
+    pagos: list[ComplementoPagoResponse] = []
     model_config = ConfigDict(from_attributes=True)
 
 

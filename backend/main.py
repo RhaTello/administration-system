@@ -28,6 +28,11 @@ with engine.connect() as conn:
         conn.commit()
     except Exception:
         pass
+    try:
+        conn.execute(text("ALTER TABLE facturas ADD COLUMN uuid TEXT"))
+        conn.commit()
+    except Exception:
+        pass
 
 # Seed de catálogos iniciales (solo si las tablas están vacías)
 with Session(engine) as session:

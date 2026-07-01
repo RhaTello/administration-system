@@ -114,6 +114,7 @@ class Factura(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     facturapi_id = Column(String, unique=True, nullable=False)
+    uuid = Column(String, nullable=True)            # folio fiscal SAT (UUID de timbre)
     folio = Column(String, nullable=True)
     fecha = Column(DateTime, default=datetime.now, nullable=False)
     cliente_id = Column(Integer, ForeignKey("clientes_fiscales.id"), nullable=True)
@@ -126,6 +127,28 @@ class Factura(Base):
     forma_pago = Column(String, nullable=True)
     metodo_pago = Column(String, nullable=True)
     status = Column(String, nullable=False, default="valid")
+
+    pagos = relationship("ComplementoPago", back_populates="factura", cascade="all, delete-orphan")
+
+
+class ComplementoPago(Base):
+    __tablename__ = "complementos_pago"
+
+    id = Column(Integer, primary_key=True, index=True)
+    facturapi_id = Column(String, unique=True, nullable=False)
+    folio = Column(String, nullable=True)
+    fecha = Column(DateTime, default=datetime.now, nullable=False)
+    fecha_pago = Column(DateTime, nullable=False)
+    factura_id = Column(Integer, ForeignKey("facturas.id"), nullable=False)
+    cliente_razon_social = Column(String, nullable=False)
+    monto = Column(Float, nullable=False)
+    forma_pago = Column(String, nullable=False)
+    numero_parcialidad = Column(Integer, nullable=False)
+    saldo_anterior = Column(Float, nullable=False)
+    saldo_insoluto = Column(Float, nullable=False)
+    status = Column(String, nullable=False, default="valid")
+
+    factura = relationship("Factura", back_populates="pagos")
 
 
 class Material(Base):
