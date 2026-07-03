@@ -25,7 +25,7 @@ function fmt(n) {
 }
 
 function descripcionProducto(p) {
-  return [p.familia?.nombre, p.medida, p.material].filter(Boolean).join(' ') || p.sku
+  return [p.familia?.categoria?.nombre, p.familia?.nombre, p.medida, p.material].filter(Boolean).join(' ') || p.sku
 }
 
 // ── Modal cancelar ────────────────────────────────────────────────────────────
