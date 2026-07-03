@@ -95,8 +95,10 @@ def crear_factura(datos: FacturaCreate, db: Session = Depends(get_db)):
         inv = r.json()
         series = inv.get("series") or ""
         numero = inv.get("folio_number") or ""
-        subtotal = float(inv.get("subtotal", 0))
         total = float(inv.get("total", 0))
+        # Facturapi puede regresar subtotal=null/0 en PPD; calcular de la misma forma que el frontend
+        fapi_subtotal = float(inv.get("subtotal") or 0)
+        subtotal = fapi_subtotal if fapi_subtotal > 0 else round(total / 1.16, 2)
 
         stamp = inv.get("stamp") or {}
         uuid = stamp.get("uuid") or inv.get("uuid")
@@ -225,22 +227,30 @@ def crear_complemento_pago(factura_id: int, datos: ComplementoPagoCreate, db: Se
 
     fecha_str = datos.fecha_pago.strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
+    base_pago = round(datos.monto / 1.16, 6)
+
     payload = {
         "customer": cliente.facturapi_id,
         "type": "P",
-        "payments": [{
-            "form": datos.forma_pago,
-            "date": fecha_str,
-            "currency": "MXN",
-            "exchange_rate": 1,
-            "amount": datos.monto,
-            "related_documents": [{
-                "uuid": factura.uuid,
-                "amount": datos.monto,
-                "installment": numero_parcialidad,
-                "last_balance": saldo_anterior,
+        "complements": [{
+            "type": "pago",
+            "data": [{
+                "payment_form": datos.forma_pago,
+                "date": fecha_str,
                 "currency": "MXN",
-                "exchange_rate": 1,
+                "related_documents": [{
+                    "uuid": factura.uuid,
+                    "amount": datos.monto,
+                    "installment": numero_parcialidad,
+                    "last_balance": saldo_anterior,
+                    "currency": "MXN",
+                    "taxes": [{
+                        "base": base_pago,
+                        "type": "IVA",
+                        "rate": 0.16,
+                        "factor": "Tasa",
+                    }],
+                }],
             }],
         }],
     }
