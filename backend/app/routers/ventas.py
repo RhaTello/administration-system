@@ -10,6 +10,34 @@ from app.services.inventario import bloquear_escritura, validar_stock, asignar_n
 router = APIRouter(prefix="/ventas", tags=["ventas"])
 
 
+@router.post("/{venta_id}/cancelar", response_model=VentaResponse)
+def cancelar_venta(venta_id: int, db: Session = Depends(get_db)):
+    bloquear_escritura(db)
+    venta = db.get(models.Venta, venta_id)
+    if not venta:
+        raise HTTPException(404, "Venta no encontrada")
+    if venta.estado == "cancelada":
+        return venta
+    factura = db.query(models.Factura).filter(
+        models.Factura.venta_id == venta_id, models.Factura.status != "canceled"
+    ).first()
+    if factura:
+        raise HTTPException(400, "Esta venta tiene una factura vigente. Cancela primero la factura y confirma su estado desde Facturas")
+    productos = {}
+    for item in venta.items:
+        producto = db.get(models.Producto, item.producto_id)
+        if not producto:
+            raise HTTPException(400, f"No se puede devolver inventario: el producto '{item.sku}' fue eliminado")
+        productos[item.producto_id] = producto
+    for item in venta.items:
+        productos[item.producto_id].stock += item.cantidad
+    venta.estado = "cancelada"
+    venta.fecha_cancelacion = datetime.now()
+    db.commit()
+    db.refresh(venta)
+    return venta
+
+
 @router.post("/", response_model=VentaResponse, status_code=201)
 def crear_venta(datos: VentaCreate, db: Session = Depends(get_db)):
     bloquear_escritura(db)

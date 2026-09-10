@@ -2,6 +2,12 @@ import { parseError } from './helpers'
 
 const BASE = '/api/ventas'
 
+export async function cancelarVenta(id) {
+  const res = await fetch(`${BASE}/${id}/cancelar`, { method: 'POST' })
+  if (!res.ok) throw new Error(await parseError(res))
+  return res.json()
+}
+
 export async function getVentas(filtros = {}) {
   const params = new URLSearchParams()
   Object.entries(filtros).forEach(([k, v]) => { if (v) params.append(k, v) })

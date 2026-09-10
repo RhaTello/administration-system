@@ -173,6 +173,8 @@ class Venta(Base):
     __tablename__ = "ventas"
 
     id = Column(Integer, primary_key=True, index=True)
+    estado = Column(String, nullable=False, default="vigente", server_default="vigente")
+    fecha_cancelacion = Column(DateTime, nullable=True)
     fecha = Column(DateTime, default=datetime.now, nullable=False)
     descuento = Column(Float, default=0, nullable=False)
     total = Column(Float, nullable=False)

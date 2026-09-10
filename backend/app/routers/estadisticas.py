@@ -56,7 +56,7 @@ def ventas_por_dia(
         func.date(models.Venta.fecha).label("fecha"),
         func.sum(models.Venta.total).label("total"),
         func.count(models.Venta.id).label("cantidad_ventas"),
-    )
+    ).filter(models.Venta.estado == "vigente")
     if fecha_desde:
         query = query.filter(models.Venta.fecha >= datetime.combine(fecha_desde, time.min))
     if fecha_hasta:
@@ -84,9 +84,8 @@ def productos_mas_vendidos(
         models.VentaItem.descripcion,
         func.sum(models.VentaItem.cantidad).label("total_piezas"),
         func.sum(models.VentaItem.total_neto).label("total_monto"),
-    )
+    ).join(models.Venta, models.VentaItem.venta_id == models.Venta.id).filter(models.Venta.estado == "vigente")
     if fecha_desde or fecha_hasta:
-        query = query.join(models.Venta, models.VentaItem.venta_id == models.Venta.id)
         if fecha_desde:
             query = query.filter(models.Venta.fecha >= datetime.combine(fecha_desde, time.min))
         if fecha_hasta:

@@ -11,6 +11,8 @@ Sistema local de inventario, ventas, cotizaciones y facturación para la tornill
 
 ## Inventario y ventas
 
+Para cancelar una nota, abrirla en **Historial** y pulsar **Cancelar nota**. Se restituyen todas las piezas una sola vez y la operación deja de contar en los totales y estadísticas. El registro se conserva como cancelado, incluida su reimpresión. Si hay una factura vigente vinculada, primero hay que cancelar el CFDI y confirmar su estado desde Facturas. Las cotizaciones convertidas conservan su vínculo aunque se cancele la venta.
+
 En **Inventario → Por reponer** se consultan productos con existencias en cero o negativas, con búsqueda y páginas de 100 registros. Durante el conteo físico, esos valores pueden no representar faltantes reales.
 
 El control **Bloquear ventas sin existencias suficientes** empieza desactivado. Activarlo al terminar el conteo: se aplica a ventas, facturas nuevas y conversiones de cotizaciones. La elección queda guardada en la base local y se conserva al actualizar.

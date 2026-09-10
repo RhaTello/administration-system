@@ -7,6 +7,7 @@ export default function TicketImprimible({ venta }) {
 
   return (
     <div id="ticket-print">
+      {venta.estado === 'cancelada' && <div className="ticket-center ticket-total">NOTA CANCELADA</div>}
       <div className="ticket-header">
         <span className="ticket-nombre">{NEGOCIO.nombre}</span>
         <span>{NEGOCIO.direccion}</span>

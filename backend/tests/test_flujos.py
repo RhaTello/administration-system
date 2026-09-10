@@ -253,6 +253,55 @@ class FlujosTest(unittest.TestCase):
                 backup.assert_called_once()
                 self.assertEqual(ejecutar.call_count, 1)
 
+    def test_cancelar_nota_restaura_stock_una_vez_y_excluye_estadisticas(self):
+        r = self.client.post('/api/ventas/', json={'items': [{'producto_id': 1, 'cantidad': 2}] * 2})
+        vid = r.json()['id']
+        self.assertEqual(self.stock(), -4)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            respuestas = list(pool.map(lambda _: self.client.post(f'/api/ventas/{vid}/cancelar'), range(2)))
+        self.assertTrue(all(r.status_code == 200 for r in respuestas))
+        self.assertEqual(self.stock(), 0)
+        venta = self.client.get(f'/api/ventas/{vid}').json()
+        self.assertEqual(venta['estado'], 'cancelada')
+        self.assertIsNotNone(venta['fecha_cancelacion'])
+        self.assertEqual(len(venta['items']), 2)
+        self.assertEqual(self.client.get('/api/estadisticas/ventas-por-dia').json(), [])
+        self.assertEqual(self.client.get('/api/estadisticas/productos-mas-vendidos').json(), [])
+
+    def test_cancelacion_requiere_factura_cancelada(self):
+        with self.proveedor():
+            factura = self.client.post('/api/facturas/', json=self.payload_factura()).json()
+        vid = factura['venta_id']
+        self.assertEqual(self.client.post(f'/api/ventas/{vid}/cancelar').status_code, 400)
+        self.assertEqual(self.stock(), -2)
+        with self.proveedor({'status': 'canceled', 'cancellation_status': 'accepted'}):
+            self.client.post(f"/api/facturas/{factura['id']}/cancelar", json={'motivo': '03'})
+        self.assertEqual(self.client.post(f'/api/ventas/{vid}/cancelar').status_code, 200)
+        self.assertEqual(self.stock(), 0)
+
+    def test_cancelacion_producto_eliminado_no_cancela_parcialmente(self):
+        with Session(self.engine) as db:
+            db.add(models.Producto(id=2, sku='T-2', familia_id=1, precio=10, stock=5))
+            db.commit()
+        r = self.client.post('/api/ventas/', json={'items': [
+            {'producto_id': 1, 'cantidad': 2}, {'producto_id': 2, 'cantidad': 1}]})
+        vid = r.json()['id']
+        with Session(self.engine) as db:
+            db.delete(db.get(models.Producto, 2))
+            db.commit()
+        self.assertEqual(self.client.post(f'/api/ventas/{vid}/cancelar').status_code, 400)
+        self.assertEqual(self.stock(), -2)
+        self.assertEqual(self.client.get(f'/api/ventas/{vid}').json()['estado'], 'vigente')
+
+    def test_cotizacion_cancelada_no_se_convierte_de_nuevo(self):
+        cid = self.cotizacion()
+        venta = self.client.post(f'/api/cotizaciones/{cid}/convertir').json()
+        self.client.post(f"/api/ventas/{venta['id']}/cancelar")
+        repetida = self.client.post(f'/api/cotizaciones/{cid}/convertir').json()
+        self.assertEqual(repetida['id'], venta['id'])
+        self.assertEqual(repetida['estado'], 'cancelada')
+        self.assertEqual(self.stock(), 0)
+
     def test_configuracion_legacy_no_impide_guardar_nota(self):
         with self.engine.begin() as conn:
             conn.execute(text('DROP TABLE configuracion_inventario'))

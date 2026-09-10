@@ -10,7 +10,8 @@ from app.services.inventario import asignar_netos
 
 def migrar(engine):
     columnas = {
-        "ventas": {"descuento": "REAL NOT NULL DEFAULT 0"},
+        "ventas": {"descuento": "REAL NOT NULL DEFAULT 0",
+                   "estado": "TEXT NOT NULL DEFAULT 'vigente'", "fecha_cancelacion": "DATETIME"},
         "productos": {"clave_prod_serv": "TEXT", "clave_unidad": "TEXT"},
         "facturas": {"uuid": "TEXT", "venta_id": "INTEGER REFERENCES ventas(id)",
                      "solicitud_id": "TEXT", "cancellation_status": "TEXT"},

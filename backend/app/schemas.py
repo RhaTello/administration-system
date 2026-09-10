@@ -111,6 +111,8 @@ class VentaItemResponse(BaseModel):
 
 class VentaResponse(BaseModel):
     id: int
+    estado: str = "vigente"
+    fecha_cancelacion: datetime | None = None
     fecha: datetime
     descuento: float
     total: float

@@ -366,23 +366,25 @@ export default function Ventas() {
         <Modal
           titulo={`Venta #${String(ventaFinalizada.id).padStart(4, '0')} registrada`}
           onCerrar={() => setVentaFinalizada(null)}
+          pie={(
+            <div className="flex gap-2">
+              <button
+                onClick={() => window.print()}
+                className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 rounded font-medium text-sm hover:bg-blue-700"
+              >
+                <Printer size={15} /> Imprimir ticket
+              </button>
+              <button
+                onClick={() => setVentaFinalizada(null)}
+                className="flex-1 py-2.5 rounded font-medium text-sm text-gray-600 bg-gray-100 hover:bg-gray-200"
+              >
+                Cerrar
+              </button>
+            </div>
+          )}
         >
-          <div className="ticket-preview mb-4">
+          <div className="ticket-preview">
             <TicketImprimible venta={ventaFinalizada} />
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => window.print()}
-              className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 rounded font-medium text-sm hover:bg-blue-700"
-            >
-              <Printer size={15} /> Imprimir ticket
-            </button>
-            <button
-              onClick={() => setVentaFinalizada(null)}
-              className="flex-1 py-2.5 rounded font-medium text-sm text-gray-600 bg-gray-100 hover:bg-gray-200"
-            >
-              Cerrar
-            </button>
           </div>
         </Modal>
       )}

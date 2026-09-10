@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Eye, Printer } from 'lucide-react'
 import Modal from '../components/Modal'
 import TicketImprimible from '../components/TicketImprimible'
-import { getVentas } from '../api/ventas'
+import { getVentas, cancelarVenta } from '../api/ventas'
 
 function formatFecha(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -25,6 +25,22 @@ export default function Historial() {
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState(null)
   const [detalle, setDetalle] = useState(null)
+  const [cancelando, setCancelando] = useState(false)
+  const [errorCancelacion, setErrorCancelacion] = useState(null)
+
+  useEffect(() => { setErrorCancelacion(null) }, [detalle?.id])
+
+  async function cancelarNota() {
+    if (!confirm(`¿Cancelar la nota #${detalle.id}? Se devolverán todos sus artículos al inventario y dejará de contar en las ventas.`)) return
+    setCancelando(true)
+    setErrorCancelacion(null)
+    try {
+      const actualizada = await cancelarVenta(detalle.id)
+      setVentas(lista => lista.map(v => v.id === actualizada.id ? actualizada : v))
+      setDetalle(actualizada)
+    } catch (e) { setErrorCancelacion(e.message) }
+    finally { setCancelando(false) }
+  }
 
   useEffect(() => {
     setCargando(true)
@@ -35,8 +51,9 @@ export default function Historial() {
       .finally(() => setCargando(false))
   }, [filtros])
 
-  const totalMonto = ventas.reduce((s, v) => s + v.total, 0)
-  const totalPiezas = ventas.reduce((s, v) => v.items.reduce((si, i) => si + i.cantidad, 0) + s, 0)
+  const vigentes = ventas.filter(v => v.estado !== 'cancelada')
+  const totalMonto = vigentes.reduce((s, v) => s + v.total, 0)
+  const totalPiezas = vigentes.reduce((s, v) => v.items.reduce((si, i) => si + i.cantidad, 0) + s, 0)
 
   const atajos = [
     { label: 'Hoy',          desde: hoy(),         hasta: hoy() },
@@ -93,8 +110,8 @@ export default function Historial() {
       {!cargando && ventas.length > 0 && (
         <div className="grid grid-cols-3 gap-4 mb-5">
           <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <p className="text-xs text-gray-500 mb-1">Ventas</p>
-            <p className="text-2xl font-bold text-gray-900">{ventas.length}</p>
+            <p className="text-xs text-gray-500 mb-1">Ventas vigentes</p>
+            <p className="text-2xl font-bold text-gray-900">{vigentes.length}</p>
           </div>
           <div className="bg-white border border-gray-200 rounded-lg p-4">
             <p className="text-xs text-gray-500 mb-1">Piezas vendidas</p>
@@ -131,6 +148,7 @@ export default function Historial() {
                 <tr key={v.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setDetalle(v)}>
                   <td className="px-4 py-3 font-mono font-medium text-gray-900">
                     #{String(v.id).padStart(4, '0')}
+                    {v.estado === 'cancelada' && <span className="block text-xs text-red-700 mt-1">Cancelada</span>}
                   </td>
                   <td className="px-4 py-3 text-gray-700">
                     {fecha.toLocaleDateString('es-MX')}
@@ -170,24 +188,34 @@ export default function Historial() {
       {detalle && (
         <Modal
           titulo={`Ticket #${String(detalle.id).padStart(4, '0')}`}
-          onCerrar={() => setDetalle(null)}
+          onCerrar={() => { if (!cancelando) setDetalle(null) }}
+          pie={(
+            <div>
+              {errorCancelacion && <p role="alert" className="text-sm text-red-700 mb-3">{errorCancelacion}</p>}
+              <div className="flex gap-2 flex-wrap">
+              {detalle.estado !== 'cancelada' && <button onClick={cancelarNota} disabled={cancelando}
+                className="flex-1 py-2.5 rounded text-sm text-white bg-red-600 hover:bg-red-700 disabled:opacity-50">
+                {cancelando ? 'Cancelando...' : 'Cancelar nota'}
+              </button>}
+              <button
+                onClick={() => window.print()}
+                className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 rounded font-medium text-sm hover:bg-blue-700"
+              >
+                <Printer size={15} /> Reimprimir
+              </button>
+              <button
+                onClick={() => setDetalle(null)}
+                disabled={cancelando}
+                className="flex-1 py-2.5 rounded font-medium text-sm text-gray-600 bg-gray-100 hover:bg-gray-200"
+              >
+                Cerrar
+              </button>
+              </div>
+            </div>
+          )}
         >
-          <div className="ticket-preview mb-4">
+          <div className="ticket-preview">
             <TicketImprimible venta={detalle} />
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => window.print()}
-              className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 rounded font-medium text-sm hover:bg-blue-700"
-            >
-              <Printer size={15} /> Reimprimir
-            </button>
-            <button
-              onClick={() => setDetalle(null)}
-              className="flex-1 py-2.5 rounded font-medium text-sm text-gray-600 bg-gray-100 hover:bg-gray-200"
-            >
-              Cerrar
-            </button>
           </div>
         </Modal>
       )}
