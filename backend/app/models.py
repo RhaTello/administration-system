@@ -85,6 +85,7 @@ class Cotizacion(Base):
     __tablename__ = "cotizaciones"
 
     id = Column(Integer, primary_key=True, index=True)
+    venta_id = Column(Integer, ForeignKey("ventas.id"), nullable=True, unique=True)
     fecha = Column(DateTime, default=datetime.now, nullable=False)
     cliente = Column(String, nullable=False)
     descuento = Column(Float, default=0, nullable=False)
@@ -113,6 +114,9 @@ class Factura(Base):
     __tablename__ = "facturas"
 
     id = Column(Integer, primary_key=True, index=True)
+    venta_id = Column(Integer, ForeignKey("ventas.id"), nullable=True, unique=True)
+    solicitud_id = Column(String, nullable=True, unique=True)
+    cancellation_status = Column(String, nullable=True)
     facturapi_id = Column(String, unique=True, nullable=False)
     uuid = Column(String, nullable=True)            # folio fiscal SAT (UUID de timbre)
     folio = Column(String, nullable=True)
@@ -187,6 +191,20 @@ class VentaItem(Base):
     descripcion = Column(String, nullable=False)
     cantidad = Column(Integer, nullable=False)
     precio_unitario = Column(Float, nullable=False)
+    costo_unitario = Column(Float, nullable=True)
+    total_neto = Column(Float, nullable=True)
     subtotal = Column(Float, nullable=False)
 
     venta = relationship("Venta", back_populates="items")
+
+
+class Configuracion(Base):
+    __tablename__ = "configuracion_inventario"
+    id = Column(Integer, primary_key=True)
+    bloquear_sin_stock = Column(Integer, nullable=False, default=0)
+
+
+class SolicitudFactura(Base):
+    __tablename__ = "solicitudes_factura"
+    id = Column(String, primary_key=True)
+    datos = Column(String, nullable=False)

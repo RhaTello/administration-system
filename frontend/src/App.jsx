@@ -9,6 +9,7 @@ import Familias from './pages/Familias'
 import Cotizaciones from './pages/Cotizaciones'
 import ClientesFiscales from './pages/ClientesFiscales'
 import Facturas from './pages/Facturas'
+import Reposicion from './pages/Reposicion'
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="historial" element={<Historial />} />
           <Route path="estadisticas" element={<Estadisticas />} />
           <Route path="productos" element={<Productos />} />
+          <Route path="reposicion" element={<Reposicion />} />
           <Route path="categorias" element={<Categorias />} />
           <Route path="familias" element={<Familias />} />
           <Route path="clientes-fiscales" element={<ClientesFiscales />} />

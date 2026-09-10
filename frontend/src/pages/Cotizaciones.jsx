@@ -145,6 +145,7 @@ function ListaCotizaciones({ onNueva, onEditar }) {
     setConvirtiendo(cotizacion.id)
     try {
       await api.convertirAVenta(cotizacion.id)
+      await cargar()
       alert(`Venta generada correctamente para ${cotizacion.cliente}.`)
     } catch (e) {
       alert(e.message)
@@ -187,6 +188,7 @@ function ListaCotizaciones({ onNueva, onEditar }) {
                 <tr key={c.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-mono text-gray-500 text-xs">
                     #{String(c.id).padStart(4, '0')}
+                    {c.venta_id && <p className="text-green-700 mt-1">Venta #{c.venta_id}</p>}
                   </td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                     {new Date(c.fecha).toLocaleDateString('es-MX')}
@@ -214,7 +216,7 @@ function ListaCotizaciones({ onNueva, onEditar }) {
                       </button>
                       <button
                         onClick={() => handleConvertir(c)}
-                        disabled={convirtiendo === c.id}
+                        disabled={convirtiendo === c.id || Boolean(c.venta_id)}
                         title="Convertir a venta"
                         className="text-gray-400 hover:text-green-600 transition-colors disabled:opacity-40"
                       >
@@ -222,6 +224,7 @@ function ListaCotizaciones({ onNueva, onEditar }) {
                       </button>
                       <button
                         onClick={() => onEditar(c)}
+                        disabled={Boolean(c.venta_id)}
                         title="Editar"
                         className="text-gray-400 hover:text-blue-600 transition-colors"
                       >
@@ -229,6 +232,7 @@ function ListaCotizaciones({ onNueva, onEditar }) {
                       </button>
                       <button
                         onClick={() => handleEliminar(c.id)}
+                        disabled={Boolean(c.venta_id)}
                         title="Eliminar"
                         className="text-gray-400 hover:text-red-600 transition-colors"
                       >

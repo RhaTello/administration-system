@@ -22,6 +22,7 @@ export default function Layout() {
           <NavLink to="/facturas" className={linkClass}>Facturas</NavLink>
           <p className="text-xs font-semibold text-gray-400 uppercase px-3 pt-3 pb-1">Inventario</p>
           <NavLink to="/productos" className={linkClass}>Productos</NavLink>
+          <NavLink to="/reposicion" className={linkClass}>Faltantes</NavLink>
           <NavLink to="/categorias" className={linkClass}>Categorías</NavLink>
           <NavLink to="/familias" className={linkClass}>Familias</NavLink>
         </nav>

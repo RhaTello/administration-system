@@ -5,12 +5,15 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app import models
 from app.schemas import VentaCreate, VentaResponse
+from app.services.inventario import bloquear_escritura, validar_stock, asignar_netos
 
 router = APIRouter(prefix="/ventas", tags=["ventas"])
 
 
 @router.post("/", response_model=VentaResponse, status_code=201)
 def crear_venta(datos: VentaCreate, db: Session = Depends(get_db)):
+    bloquear_escritura(db)
+    validar_stock(db, [(i.producto_id, i.cantidad) for i in datos.items])
     items_validados = []
 
     for item in datos.items:
@@ -48,18 +51,23 @@ def crear_venta(datos: VentaCreate, db: Session = Depends(get_db)):
     db.add(venta)
     db.flush()  # obtiene venta.id sin hacer commit aún
 
+    detalles = []
     for item in items_validados:
-        db.add(models.VentaItem(
+        detalle = models.VentaItem(
             venta_id=venta.id,
             producto_id=item["producto"].id,
             sku=item["sku"],
             descripcion=item["descripcion"],
             cantidad=item["cantidad"],
             precio_unitario=item["precio_unitario"],
+            costo_unitario=item["producto"].costo,
             subtotal=item["subtotal"],
-        ))
+        )
+        db.add(detalle)
+        detalles.append(detalle)
         item["producto"].stock -= item["cantidad"]
 
+    asignar_netos(detalles, total)
     db.commit()
     db.refresh(venta)
     return venta

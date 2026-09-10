@@ -103,6 +103,8 @@ class VentaItemResponse(BaseModel):
     descripcion: str
     cantidad: int
     precio_unitario: float
+    costo_unitario: float | None = None
+    total_neto: float | None = None
     subtotal: float
     model_config = ConfigDict(from_attributes=True)
 
@@ -199,6 +201,7 @@ class CotizacionItemResponse(BaseModel):
 
 class CotizacionResponse(BaseModel):
     id: int
+    venta_id: int | None = None
     fecha: datetime
     cliente: str
     descuento: float
@@ -209,15 +212,17 @@ class CotizacionResponse(BaseModel):
 
 
 class FacturaItemCreate(BaseModel):
+    producto_id: int
     descripcion: str
     clave_prod_serv: str
     clave_unidad: str
     unidad: str = "Pieza"
-    cantidad: float = Field(gt=0)
+    cantidad: int = Field(gt=0)
     precio_unitario: float = Field(gt=0)
 
 
 class FacturaCreate(BaseModel):
+    solicitud_id: str = Field(min_length=16, max_length=100)
     cliente_id: int
     items: list[FacturaItemCreate] = Field(min_length=1)
     uso_cfdi: str
@@ -250,6 +255,8 @@ class ComplementoPagoResponse(BaseModel):
 
 class FacturaResponse(BaseModel):
     id: int
+    venta_id: int | None = None
+    cancellation_status: str | None = None
     facturapi_id: str
     uuid: str | None
     folio: str | None

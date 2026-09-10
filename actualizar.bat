@@ -1,23 +1,17 @@
 @echo off
-title Actualizando Systema...
-echo Descargando cambios de GitHub...
-git pull
-
-echo.
-echo Actualizando dependencias del backend...
-cd /d "%~dp0backend"
-call .venv\Scripts\activate
-pip install -r requirements.txt -q
-
-echo.
-echo Actualizando dependencias del frontend...
-cd /d "%~dp0frontend"
-call npm install --silent
-
-echo.
-echo ========================================
-echo  Actualizacion completada.
-echo  Cierra las ventanas del sistema y
-echo  vuelve a ejecutar iniciar.bat
-echo ========================================
+setlocal
+title Actualizando Systema
+cd /d "%~dp0"
+set "SYSTEMA_PYTHON=%~dp0backend\.venv\Scripts\python.exe"
+if not exist "%SYSTEMA_PYTHON%" set "SYSTEMA_PYTHON=%~dp0backend\venv\Scripts\python.exe"
+if not exist "%SYSTEMA_PYTHON%" (
+    python -m venv "%~dp0backend\.venv"
+    if errorlevel 1 goto :error
+    set "SYSTEMA_PYTHON=%~dp0backend\.venv\Scripts\python.exe"
+)
+"%SYSTEMA_PYTHON%" "%~dp0backend\actualizar.py"
+exit /b %errorlevel%
+:error
+echo No se completo la actualizacion. Revisa el error mostrado arriba.
 pause
+exit /b 1

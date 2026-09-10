@@ -83,7 +83,7 @@ def productos_mas_vendidos(
         models.VentaItem.sku,
         models.VentaItem.descripcion,
         func.sum(models.VentaItem.cantidad).label("total_piezas"),
-        func.sum(models.VentaItem.subtotal).label("total_monto"),
+        func.sum(models.VentaItem.total_neto).label("total_monto"),
     )
     if fecha_desde or fecha_hasta:
         query = query.join(models.Venta, models.VentaItem.venta_id == models.Venta.id)

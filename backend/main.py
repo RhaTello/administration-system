@@ -1,38 +1,17 @@
 from dotenv import load_dotenv
-load_dotenv()
+from pathlib import Path
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.database import engine
 from app import models
-from app.routers import health, productos, categorias, familias, ventas, estadisticas, catalogos, cotizaciones, clientes_fiscales, facturas
+from app.routers import health, productos, categorias, familias, ventas, estadisticas, catalogos, cotizaciones, clientes_fiscales, facturas, configuracion
 
-models.Base.metadata.create_all(bind=engine)
+from app.migrations import migrar
 
-# Migraciones manuales para columnas nuevas en tablas existentes
-with engine.connect() as conn:
-    try:
-        conn.execute(text("ALTER TABLE ventas ADD COLUMN descuento REAL NOT NULL DEFAULT 0"))
-        conn.commit()
-    except Exception:
-        pass
-    try:
-        conn.execute(text("ALTER TABLE productos ADD COLUMN clave_prod_serv TEXT"))
-        conn.commit()
-    except Exception:
-        pass
-    try:
-        conn.execute(text("ALTER TABLE productos ADD COLUMN clave_unidad TEXT"))
-        conn.commit()
-    except Exception:
-        pass
-    try:
-        conn.execute(text("ALTER TABLE facturas ADD COLUMN uuid TEXT"))
-        conn.commit()
-    except Exception:
-        pass
+migrar(engine)
 
 # Seed de catálogos iniciales (solo si las tablas están vacías)
 with Session(engine) as session:
@@ -55,6 +34,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(configuracion.router, prefix="/api")
 app.include_router(health.router, prefix="/api")
 app.include_router(productos.router, prefix="/api")
 app.include_router(categorias.router, prefix="/api")
@@ -69,4 +49,4 @@ app.include_router(facturas.router, prefix="/api")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

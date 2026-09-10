@@ -214,8 +214,8 @@ export default function Estadisticas() {
 
         {/* ── Margen de ganancia ── */}
         <div className="bg-white border border-gray-200 rounded-lg p-5">
-          <h2 className="font-semibold text-gray-800 mb-1">Margen de ganancia</h2>
-          <p className="text-xs text-gray-400 mb-4">Solo productos con precio y costo definidos · ordenados por margen</p>
+          <h2 className="font-semibold text-gray-800 mb-1">Precio y costo actuales</h2>
+          <p className="text-xs text-gray-400 mb-4">Comparación del catálogo actual; no representa la utilidad histórica. El porcentaje indica el incremento sobre el costo.</p>
           {cargandoFijo ? (
             <p className="text-sm text-gray-400 text-center py-6">Cargando...</p>
           ) : margen.length === 0 ? (

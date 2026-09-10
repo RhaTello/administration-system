@@ -32,6 +32,7 @@ function descripcionProducto(p) {
 
 function ModalCancelar({ factura, onCancelar, onCerrar }) {
   const [motivo, setMotivo] = useState('02')
+  const [sustitucion, setSustitucion] = useState('')
   const [cancelando, setCancelando] = useState(false)
   const [error, setError] = useState(null)
 
@@ -39,7 +40,7 @@ function ModalCancelar({ factura, onCancelar, onCerrar }) {
     setCancelando(true)
     setError(null)
     try {
-      await onCancelar(factura.id, motivo)
+      await onCancelar(factura.id, motivo, sustitucion)
       onCerrar()
     } catch (e) {
       setError(e.message)
@@ -51,7 +52,7 @@ function ModalCancelar({ factura, onCancelar, onCerrar }) {
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
         <h2 className="font-semibold text-gray-800">Cancelar factura {factura.folio || `#${factura.id}`}</h2>
-        <p className="text-sm text-gray-500">Esta acción cancela el CFDI ante el SAT. No se puede deshacer.</p>
+        <p className="text-sm text-gray-500">Solicita la cancelación del CFDI. La venta y sus existencias se conservan; cancelar el comprobante no registra una devolución.</p>
         <div>
           <label className={labelClass}>Motivo de cancelación</label>
           <select value={motivo} onChange={e => setMotivo(e.target.value)} className={`${inputClass} w-full`}>
@@ -60,6 +61,9 @@ function ModalCancelar({ factura, onCancelar, onCerrar }) {
             ))}
           </select>
         </div>
+        {motivo === '01' && <label className={labelClass}>UUID de la factura sustituta
+          <input value={sustitucion} onChange={e => setSustitucion(e.target.value)} className={`${inputClass} w-full mt-1`} />
+        </label>}
         {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded">{error}</p>}
         <div className="flex gap-2 justify-end">
           <button onClick={onCerrar} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded hover:bg-gray-200">
@@ -230,6 +234,10 @@ export default function Facturas() {
   const [carrito, setCarrito] = useState([])
   const [datos, setDatos] = useState({ cliente_id: '', uso_cfdi: '', forma_pago: '', metodo_pago: 'PUE' })
   const [timbrando, setTimbrando] = useState(false)
+  const [pendiente, setPendiente] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('factura-pendiente') || 'null') }
+    catch { return null }
+  })
   const [error, setError] = useState(null)
 
   // Historial
@@ -319,30 +327,46 @@ export default function Facturas() {
   const itemsSinCodigos = carrito.filter(i => !i.clave_prod_serv || !i.clave_unidad)
 
   async function timbrar() {
+    if (pendiente) { await enviarFactura(pendiente); return }
     if (!datos.cliente_id) { setError('Selecciona un cliente'); return }
     if (!datos.uso_cfdi) { setError('Selecciona el uso de CFDI'); return }
     if (!datos.forma_pago) { setError('Selecciona la forma de pago'); return }
     if (carrito.length === 0) { setError('Agrega al menos un concepto'); return }
     if (itemsSinCodigos.length > 0) { setError(`${itemsSinCodigos.length} concepto(s) sin clave SAT. Complétalos primero.`); return }
-    setError(null)
-    setTimbrando(true)
-    try {
-      await api.createFactura({
+    const payload = {
+        solicitud_id: crypto.randomUUID(),
         cliente_id: Number(datos.cliente_id),
         uso_cfdi: datos.uso_cfdi,
         forma_pago: datos.forma_pago,
         metodo_pago: datos.metodo_pago,
-        items: carrito.map(({ descripcion, clave_prod_serv, clave_unidad, unidad, cantidad, precio_unitario }) => ({
+        items: carrito.map(({ _productoId, descripcion, clave_prod_serv, clave_unidad, unidad, cantidad, precio_unitario }) => ({
+          producto_id: _productoId,
           descripcion, clave_prod_serv, clave_unidad, unidad,
           cantidad: Number(cantidad),
           precio_unitario: Number(precio_unitario),
         })),
-      })
+    }
+    await enviarFactura(payload)
+  }
+
+  async function enviarFactura(payload) {
+    setError(null)
+    setTimbrando(true)
+    try {
+      localStorage.setItem('factura-pendiente', JSON.stringify(payload))
+      setPendiente(payload)
+      await api.createFactura(payload)
+      localStorage.removeItem('factura-pendiente')
+      setPendiente(null)
       setCarrito([])
       setDatos({ cliente_id: '', uso_cfdi: '', forma_pago: '', metodo_pago: 'PUE' })
       setFiltros(FILTROS_VACIOS)
       setVista('historial')
     } catch (e) {
+      if ([400, 422].includes(e.status)) {
+        localStorage.removeItem('factura-pendiente')
+        setPendiente(null)
+      }
       setError(e.message)
     } finally {
       setTimbrando(false)
@@ -353,9 +377,9 @@ export default function Facturas() {
     api.getFacturas().then(setFacturas).catch(() => {})
   }
 
-  async function handleCancelar(id, motivo) {
-    await api.cancelarFactura(id, motivo)
-    setFacturas(fs => fs.map(f => f.id === id ? { ...f, status: 'canceled' } : f))
+  async function handleCancelar(id, motivo, sustitucion) {
+    const resultado = await api.cancelarFactura(id, motivo, sustitucion)
+    setFacturas(fs => fs.map(f => f.id === id ? { ...f, ...resultado } : f))
   }
 
   function descargar(url) {
@@ -365,6 +389,11 @@ export default function Facturas() {
 
   return (
     <div className="flex flex-col h-full">
+      {pendiente && <div className="bg-amber-50 text-amber-900 p-3 text-sm">
+        Hay una factura por confirmar ({pendiente.items.length} conceptos). Se recuperará con los datos enviados originalmente.
+        <button disabled={timbrando} onClick={() => enviarFactura(pendiente)} className="ml-3 underline disabled:opacity-40">{timbrando ? 'Confirmando...' : 'Reintentar confirmación'}</button>
+        {error && <p role="alert" className="mt-1">{error}</p>}
+      </div>}
 
       {/* Header con toggle de vista */}
       <div className="bg-white border-b border-gray-200 px-5 py-3 flex items-center gap-4 shrink-0">
@@ -627,7 +656,7 @@ export default function Facturas() {
                   const tieneSaldo = esPPD && saldo > 0.01 && f.status === 'valid'
                   return (
                     <tr key={f.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-mono text-gray-700">{f.folio || `#${f.id}`}</td>
+                      <td className="px-4 py-3 font-mono text-gray-700">{f.folio || `#${f.id}`}<p className="text-xs text-gray-500">{f.venta_id ? `Venta #${f.venta_id}` : 'Sin venta vinculada'}</p></td>
                       <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
                         {new Date(f.fecha).toLocaleDateString('es-MX')}
                       </td>
@@ -647,6 +676,15 @@ export default function Facturas() {
                         <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">{f.metodo_pago}</span>
                       </td>
                       <td className="px-4 py-3">
+                        {f.cancellation_status && f.cancellation_status !== 'none' && <div className="text-xs text-amber-700 mb-1">
+                          Cancelación: {({ pending: 'pendiente', verifying: 'en revisión', accepted: 'aceptada', rejected: 'rechazada', expired: 'vencida' })[f.cancellation_status] || f.cancellation_status}
+                          <button className="block underline" onClick={async () => {
+                            try {
+                              const actualizada = await api.actualizarEstado(f.id)
+                              setFacturas(fs => fs.map(x => x.id === f.id ? actualizada : x))
+                            } catch (e) { alert(e.message) }
+                          }}>Consultar estado</button>
+                        </div>}
                         {f.status === 'valid'
                           ? <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">Vigente</span>
                           : <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded">Cancelada</span>}

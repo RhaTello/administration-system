@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app import models
 from app.schemas import CotizacionCreate, CotizacionResponse, VentaResponse
+from app.services.inventario import bloquear_escritura, validar_stock, asignar_netos
 
 router = APIRouter(prefix="/cotizaciones", tags=["cotizaciones"])
 
@@ -87,9 +88,12 @@ def crear_cotizacion(datos: CotizacionCreate, db: Session = Depends(get_db)):
 
 @router.put("/{cotizacion_id}", response_model=CotizacionResponse)
 def actualizar_cotizacion(cotizacion_id: int, datos: CotizacionCreate, db: Session = Depends(get_db)):
+    bloquear_escritura(db)
     cotizacion = db.query(models.Cotizacion).filter(models.Cotizacion.id == cotizacion_id).first()
     if not cotizacion:
         raise HTTPException(status_code=404, detail="Cotización no encontrada")
+    if cotizacion.venta_id:
+        raise HTTPException(400, "La cotización ya fue convertida a venta y no se puede editar")
 
     subtotal_bruto = round(sum(i.precio_unitario * i.cantidad for i in datos.items), 2)
     total = round(subtotal_bruto * (1 - datos.descuento / 100), 2)
@@ -112,20 +116,27 @@ def actualizar_cotizacion(cotizacion_id: int, datos: CotizacionCreate, db: Sessi
 
 @router.delete("/{cotizacion_id}", status_code=204)
 def eliminar_cotizacion(cotizacion_id: int, db: Session = Depends(get_db)):
+    bloquear_escritura(db)
     cotizacion = db.query(models.Cotizacion).filter(models.Cotizacion.id == cotizacion_id).first()
     if not cotizacion:
         raise HTTPException(status_code=404, detail="Cotización no encontrada")
+    if cotizacion.venta_id:
+        raise HTTPException(400, "La cotización ya fue convertida a venta y no se puede eliminar")
     db.delete(cotizacion)
     db.commit()
 
 
 @router.post("/{cotizacion_id}/convertir", response_model=VentaResponse)
 def convertir_a_venta(cotizacion_id: int, db: Session = Depends(get_db)):
+    bloquear_escritura(db)
     cotizacion = _con_items(db, cotizacion_id)
     if not cotizacion:
         raise HTTPException(status_code=404, detail="Cotización no encontrada")
+    if cotizacion.venta_id:
+        return db.get(models.Venta, cotizacion.venta_id)
     if not cotizacion.items:
         raise HTTPException(status_code=400, detail="La cotización no tiene productos")
+    validar_stock(db, [(i.producto_id, i.cantidad) for i in cotizacion.items])
 
     for item in cotizacion.items:
         if not db.query(models.Producto).filter(models.Producto.id == item.producto_id).first():
@@ -143,19 +154,25 @@ def convertir_a_venta(cotizacion_id: int, db: Session = Depends(get_db)):
     db.add(venta)
     db.flush()
 
+    detalles = []
     for item in cotizacion.items:
         producto = db.query(models.Producto).filter(models.Producto.id == item.producto_id).first()
-        db.add(models.VentaItem(
+        detalle = models.VentaItem(
             venta_id=venta.id,
             producto_id=item.producto_id,
             sku=item.sku,
             descripcion=item.descripcion,
             cantidad=item.cantidad,
             precio_unitario=item.precio_unitario,
+            costo_unitario=producto.costo,
             subtotal=item.subtotal,
-        ))
+        )
+        db.add(detalle)
+        detalles.append(detalle)
         producto.stock -= item.cantidad
 
+    asignar_netos(detalles, venta.total)
+    cotizacion.venta_id = venta.id
     db.commit()
 
     return (
